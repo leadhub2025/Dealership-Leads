@@ -19,13 +19,24 @@ export const searchMarketLeads = async (
 ): Promise<MarketInsight[]> => {
   const ai = getAiClient();
   
-  // Construct specific vehicle string with high detail
-  const effectiveBrand = brand === 'Any' ? '' : brand;
-  let vehicleQuery = `${type} ${effectiveBrand} ${model}`.replace(/\s+/g, ' ').trim();
+  // --- ALGORITHM STEP 1: QUERY CONSTRUCTION ---
+  // Construct the "highly specific query string" as defined in the system architecture.
   
-  if (trim) vehicleQuery += ` ${trim}`;
-  if (fuel && fuel !== 'Any') vehicleQuery += ` ${fuel}`;
-  if (transmission && transmission !== 'Any') vehicleQuery += ` ${transmission}`;
+  const effectiveBrand = brand === 'Any' ? '' : brand;
+  let coreVehicle = `${effectiveBrand} ${model}`.trim();
+  if (trim) coreVehicle += ` ${trim}`;
+  
+  const attributes = [];
+  if (type) attributes.push(type);
+  if (fuel && fuel !== 'Any') attributes.push(fuel);
+  if (transmission && transmission !== 'Any') attributes.push(transmission);
+  
+  // Define targeted sources and intent keywords
+  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za";
+  const intentKeywords = "(private seller OR owner OR urgent sale OR wanted OR looking for OR cash ready)";
+  
+  // The Master Query String
+  const constructedQuery = `"${coreVehicle}" ${attributes.join(' ')} ${region} ${intentKeywords} ${siteOperators}`;
 
   let mileageContext = "";
   if (mileage && (mileage.min || mileage.max)) {
@@ -36,19 +47,18 @@ export const searchMarketLeads = async (
     Act as an expert automotive market researcher in South Africa.
     
     TASK:
-    Conduct a comprehensive search for active vehicle opportunities for a dealership in ${region}.
-    Target Vehicle: ${vehicleQuery}
+    Execute a real-time Google Search using the following optimized query strategy to find active leads:
+    Query: ${constructedQuery}
     ${mileageContext}
     
     SEARCH OBJECTIVES:
-    Use Google Search to find real-time, recent (last 30 days) opportunities from:
     1. Classified Listings (Gumtree, JunkMail, AutoTrader, Cars.co.za)
     2. Social Media (Facebook Marketplace, Public Groups like "VW Club SA", "4x4 Community")
     3. Forum Discussions (MyBroadband, 4x4Community)
     
     CRITICAL INSTRUCTIONS:
-    - Look for "FOR SALE" listings by private individuals.
-    - Look for "WANTED" or "LOOKING FOR" posts (potential buyers).
+    - Look for "FOR SALE" listings by private individuals (Acquisition Leads).
+    - Look for "WANTED" or "LOOKING FOR" posts (Buyer Leads).
     - EXCLUDE listings from major aggregator dealerships if possible; focus on private market signals.
     - ${trim ? `MUST match the specific variant: "${trim}"` : 'Ensure results match the model specs.'}
     
@@ -59,7 +69,7 @@ export const searchMarketLeads = async (
     
     For each item, strictly use these keys:
     Topic: [Brief Title, e.g. "2023 Ford Ranger Wildtrak - Private Sale"]
-    Sentiment: ["HOT" (Active Buyer/Seller), "Warm" (Researching), "Cold"]
+    Sentiment: ["HOT" (Active Buyer/Seller - Urgent/Cash), "Warm" (Researching/Trade-in), "Cold"]
     Summary: [Key details: Price, Year, Mileage, and Condition]
     SourceTitle: [Name of the site, e.g. "Facebook Marketplace"]
     SourceURI: [Direct URL to the listing/post]
