@@ -24,7 +24,8 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
     setError('');
 
     try {
-      const dealer = await signInDealer(email);
+      // Pass both email and password to the service
+      const dealer = await signInDealer(email, password);
       
       if (dealer) {
         if (dealer.status === 'Pending') {
@@ -56,7 +57,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
         };
         onLogin(user);
       } else {
-        setError('No dealership found with this email. Please register.');
+        setError('Invalid credentials or no dealership found. Please try again.');
       }
     } catch (err) {
       console.error(err);

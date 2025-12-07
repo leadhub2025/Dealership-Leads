@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Dealership } from '../types';
 import { NAAMSA_BRANDS, SA_REGIONS } from '../constants';
-import { Building2, MapPin, User, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Car, CreditCard, Settings, BarChart3, X } from 'lucide-react';
+import { Building2, MapPin, User, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Car, CreditCard, Settings, BarChart3, X, Lock } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (dealer: Dealership) => void;
@@ -17,10 +17,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) => {
     vehicleConditions: string[];
     minScore: number;
     plan: 'Standard' | 'Pro' | 'Enterprise';
+    password?: string;
   }>({
     name: '',
     contactPerson: '',
     email: '',
+    password: '',
     brand: NAAMSA_BRANDS[0].id,
     region: SA_REGIONS[0],
     detailedAor: '',
@@ -52,6 +54,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) => {
     if (step === 1) {
       if (!formData.name || !formData.email || !formData.contactPerson) {
         alert("Please fill in all dealership details.");
+        return;
+      }
+      if (!formData.password || formData.password.length < 6) {
+        alert("Please enter a secure password (min 6 chars).");
         return;
       }
     }
@@ -86,6 +92,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) => {
       detailedAor: formData.detailedAor,
       contactPerson: formData.contactPerson!,
       email: formData.email!,
+      password: formData.password!, // Pass the password
       status: 'Active',
       leadsAssigned: 0,
       maxLeadsCapacity: formData.maxLeadsCapacity || 50,
@@ -105,27 +112,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) => {
     
     onComplete(newDealer);
   };
-
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-center space-x-2 md:space-x-4 mb-8">
-      {[1, 2, 3, 4].map((num) => (
-        <div key={num} className="flex items-center">
-          <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold transition-all text-sm md:text-base ${
-            step === num 
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
-              : step > num 
-                ? 'bg-green-500 text-white' 
-                : 'bg-slate-800 text-slate-500 border border-slate-700'
-          }`}>
-            {step > num ? <CheckCircle className="w-5 h-5 md:w-6 md:h-6" /> : num}
-          </div>
-          {num < 4 && (
-            <div className={`w-8 md:w-16 h-1 mx-1 md:mx-2 rounded-full ${step > num ? 'bg-green-500' : 'bg-slate-800'}`}></div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 p-4 overflow-y-auto">
@@ -214,14 +200,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) => {
                     </div>
                     <div>
                        <label className="block text-sm text-slate-400 mb-1">Business Email</label>
-                       <p className="text-xs text-slate-500 mb-2">Used for login and lead notifications.</p>
-                       <input 
-                          type="email" 
-                          value={formData.email}
-                          onChange={(e) => updateField('email', e.target.value)}
-                          className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                          placeholder="e.g. sales@mccarthy.co.za"
-                       />
+                       <div className="relative">
+                          <input 
+                             type="email" 
+                             value={formData.email}
+                             onChange={(e) => updateField('email', e.target.value)}
+                             className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                             placeholder="e.g. sales@mccarthy.co.za"
+                          />
+                       </div>
+                       <p className="text-xs text-slate-500 mt-1">Used for login and lead notifications.</p>
+                    </div>
+                    <div>
+                       <label className="block text-sm text-slate-400 mb-1">Set Password</label>
+                       <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                          <input 
+                             type="password" 
+                             value={formData.password}
+                             onChange={(e) => updateField('password', e.target.value)}
+                             className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                             placeholder="••••••••"
+                          />
+                       </div>
+                       <p className="text-xs text-slate-500 mt-1">Create a secure password for your dashboard access.</p>
                     </div>
                  </div>
               )}

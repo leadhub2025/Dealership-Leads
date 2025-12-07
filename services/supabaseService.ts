@@ -13,6 +13,7 @@ const MOCK_DEALERS: Dealership[] = [
     region: 'Gauteng',
     contactPerson: 'Johan Smit',
     email: 'johan@mccarthy.co.za',
+    password: 'password123',
     status: 'Active',
     leadsAssigned: 124,
     billing: { plan: 'Enterprise', costPerLead: 150, credits: 5000, totalSpent: 18600, lastBilledDate: '2023-10-01', currentUnbilledAmount: 450 }
@@ -24,6 +25,7 @@ const MOCK_DEALERS: Dealership[] = [
     region: 'Gauteng',
     contactPerson: 'Sarah Jones',
     email: 'sarah@barons.co.za',
+    password: 'password123',
     status: 'Active',
     leadsAssigned: 89,
     billing: { plan: 'Pro', costPerLead: 250, credits: 0, totalSpent: 22250, lastBilledDate: '2023-10-01', currentUnbilledAmount: 1250 }
@@ -35,6 +37,7 @@ const MOCK_DEALERS: Dealership[] = [
     region: 'Gauteng',
     contactPerson: 'Mike Botha',
     email: 'mike@fordkp.co.za',
+    password: 'password123',
     status: 'Active',
     leadsAssigned: 45,
     billing: { plan: 'Standard', costPerLead: 350, credits: 0, totalSpent: 15750, lastBilledDate: '2023-10-01', currentUnbilledAmount: 700 }
@@ -46,6 +49,7 @@ const MOCK_DEALERS: Dealership[] = [
     region: 'KwaZulu-Natal',
     contactPerson: 'Suresh Naidoo',
     email: 'suresh@halfway.co.za',
+    password: 'password123',
     status: 'Active',
     leadsAssigned: 156,
     billing: { plan: 'Enterprise', costPerLead: 150, credits: 0, totalSpent: 23400, lastBilledDate: '2023-10-01', currentUnbilledAmount: 0 }
@@ -202,7 +206,7 @@ export const updateDealer = async (id: string, updates: Partial<Dealership>) => 
 
 // --- AUTH HELPER ---
 
-export const signInDealer = async (email: string) => {
+export const signInDealer = async (email: string, password?: string) => {
   try {
     const { data, error } = await supabase
       .from('dealerships')
@@ -211,10 +215,25 @@ export const signInDealer = async (email: string) => {
       .single();
       
     if (error) throw error;
+    
+    // Basic password check for Supabase DB row (Production would use supabase.auth)
+    if (password && data.password && data.password !== password) {
+       return null;
+    }
+    
     return data as Dealership;
   } catch (error) {
     // Fallback Auth
     const dealers = getLocalData('dealers', MOCK_DEALERS);
-    return dealers.find(d => d.email.toLowerCase() === email.toLowerCase()) || null;
+    const found = dealers.find(d => d.email.toLowerCase() === email.toLowerCase());
+    
+    if (found && password) {
+       // If dealer has no password set (old mock data), allow any or default 'password123' check
+       if (found.password && found.password !== password) return null;
+       // If no password exists on record, we allow it (development mode) or check against default
+       if (!found.password && password !== 'password123') return null; 
+    }
+    
+    return found || null;
   }
 };

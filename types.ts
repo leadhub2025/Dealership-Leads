@@ -37,6 +37,7 @@ export interface Dealership {
   detailedAor?: string; // Specific towns or districts
   contactPerson: string;
   email: string;
+  password?: string; // Added for registration flow
   status: 'Active' | 'Pending';
   leadsAssigned: number;
   maxLeadsCapacity?: number; // Optional cap for distribution logic
