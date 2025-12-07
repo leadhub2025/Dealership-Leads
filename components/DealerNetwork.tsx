@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Dealership } from '../types';
-import { Building2, MapPin, Plus, CheckCircle, X, Search, BarChart, TrendingUp, User, Pencil, Wand2, Settings, Power } from 'lucide-react';
+import { Building2, MapPin, Plus, CheckCircle, X, Search, BarChart, TrendingUp, User, Pencil, Wand2, Settings, Power, AlertTriangle } from 'lucide-react';
 import { NAAMSA_BRANDS, SA_REGIONS } from '../constants';
 
 interface DealerNetworkProps {
@@ -130,6 +130,13 @@ const DealerNetwork: React.FC<DealerNetworkProps> = ({ dealers, onAddDealer, onU
   const totalLeads = dealers.reduce((acc, curr) => acc + (curr.leadsAssigned || 0), 0);
   const maxLeads = Math.max(...dealers.map(d => d.leadsAssigned || 0), 1);
   const avgLeads = dealers.length > 0 ? (totalLeads / dealers.length).toFixed(1) : 0;
+
+  // Derived State for Modal
+  const currentEditingDealer = editingId ? dealers.find(d => d.id === editingId) : null;
+  const currentLeads = currentEditingDealer?.leadsAssigned || 0;
+  const currentCap = formData.maxCapacity ? parseInt(formData.maxCapacity) : 0;
+  const isCapacityFull = currentCap > 0 && currentLeads >= currentCap;
+  const isCapacityNear = currentCap > 0 && currentLeads >= currentCap * 0.8 && !isCapacityFull;
 
   return (
     <div className="space-y-8">
@@ -422,15 +429,34 @@ const DealerNetwork: React.FC<DealerNetworkProps> = ({ dealers, onAddDealer, onU
                  <p className="text-xs text-slate-500 uppercase font-bold flex items-center">
                     <Settings className="w-3 h-3 mr-1" /> Dealer Configuration
                  </p>
+
+                 {/* Capacity Warning Banner */}
+                 {(isCapacityFull || isCapacityNear) && (
+                    <div className={`p-2 rounded border flex items-start gap-2 text-xs mb-2 ${
+                        isCapacityFull ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                    }`}>
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-bold">{isCapacityFull ? 'Capacity Reached' : 'Nearing Capacity'}</p>
+                            <p>
+                                {currentLeads} / {currentCap} leads assigned. 
+                                {isCapacityFull ? ' Dealer will not receive distributed leads.' : ''}
+                            </p>
+                        </div>
+                    </div>
+                 )}
+
                  <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs text-slate-400 mb-1">Status</label>
                         <select 
                            value={formData.status}
                            onChange={(e) => setFormData({...formData, status: e.target.value as 'Active' | 'Pending'})}
-                           className="w-full bg-slate-800 border border-slate-600 text-white rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                           className={`w-full bg-slate-800 border text-white rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 focus:outline-none ${
+                               isCapacityFull ? 'border-red-500/50 text-red-100' : 'border-slate-600'
+                           }`}
                         >
-                           <option value="Active">Active</option>
+                           <option value="Active">Active {isCapacityFull ? '(Capacity Full)' : ''}</option>
                            <option value="Pending">Pending</option>
                         </select>
                     </div>
