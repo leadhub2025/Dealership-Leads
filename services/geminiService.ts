@@ -1,8 +1,9 @@
+
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { MarketInsight } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.API_KEY ? process.env.API_KEY.trim() : "";
   if (!apiKey) throw new Error("API Key not found. Ensure process.env.API_KEY is set.");
   return new GoogleGenAI({ apiKey });
 };
@@ -104,7 +105,6 @@ export const searchMarketLeads = async (
   transmission?: string,
   mileage?: { min: string; max: string }
 ): Promise<MarketInsight[]> => {
-  const ai = getAiClient();
   
   // --- ALGORITHM STEP 1: QUERY CONSTRUCTION ---
   const effectiveBrand = brand === 'Any' ? '' : brand;
@@ -167,6 +167,7 @@ export const searchMarketLeads = async (
   `;
 
   try {
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -196,8 +197,13 @@ export const searchMarketLeads = async (
 
     return leads;
 
-  } catch (error) {
-    console.error("Lead Search Error (Falling back to simulation):", error);
+  } catch (error: any) {
+    // Specifically handle 400 INVALID_ARGUMENT (API Key issues) or general failures
+    if (error.message?.includes('400') || error.message?.includes('API key')) {
+      console.error("API Key or Validation Error. Falling back to simulation.", error);
+    } else {
+      console.error("Lead Search Error (Falling back to simulation):", error);
+    }
     // Fallback to simulation ensures the user always gets a demo experience
     return await generateSimulatedLeads(brand, model, region, type);
   }
@@ -293,7 +299,7 @@ export const generateMarketingVideo = async (
     // OR that the calling context has handled key selection via window.aistudio.
     
     // We create a fresh client here to ensure we pick up any runtime key changes
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.API_KEY ? process.env.API_KEY.trim() : "";
     if (!apiKey) throw new Error("API Key required for video generation");
 
     const ai = new GoogleGenAI({ apiKey });
