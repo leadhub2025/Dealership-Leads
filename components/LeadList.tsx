@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, Dealership } from '../types';
-import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart } from 'lucide-react';
-import { NAAMSA_BRANDS } from '../constants';
+import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck } from 'lucide-react';
+import { NAAMSA_BRANDS, POPIA_DISCLAIMER } from '../constants';
 import { generateCSV, downloadCSV } from '../services/exportService';
 import { generateOutreachScript } from '../services/geminiService';
 import { openNativeEmailClient, constructEmailSubject } from '../services/emailService';
@@ -44,6 +43,9 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
 
   // Email Modal State
   const [emailModal, setEmailModal] = useState<{ open: boolean; leadId: string; to: string; subject: string; body: string; loading: boolean } | null>(null);
+
+  // Compliance Info State
+  const [showComplianceInfo, setShowComplianceInfo] = useState(false);
 
   // Auto-Refresh Interval
   useEffect(() => {
@@ -227,9 +229,18 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
   return (
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-white mb-2">My Leads CRM</h2>
-          <p className="text-slate-400">Manage and convert your active pipeline.</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-3xl font-bold text-white mb-2">My Leads CRM</h2>
+            <p className="text-slate-400">Manage and convert your active pipeline.</p>
+          </div>
+          <button 
+            onClick={() => setShowComplianceInfo(true)}
+            className="text-slate-500 hover:text-green-400 transition-colors mt-1"
+            title="POPIA Compliance Info"
+          >
+            <ShieldCheck className="w-5 h-5" />
+          </button>
         </div>
         <div className="flex gap-2 items-center">
           {isRefreshing ? (
@@ -410,64 +421,102 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
           </table>
         </div>
 
-        {/* Mobile List */}
-        <div className="md:hidden grid grid-cols-1 divide-y divide-slate-700">
-           {filteredLeads.map(lead => (
-              <div key={lead.id} className="p-4 bg-slate-800">
-                 <div className="flex justify-between items-start mb-2">
-                    <div>
-                       <div className="flex items-center gap-2">
+        {/* Mobile List - Optimized Card Layout */}
+        <div className="md:hidden grid grid-cols-1 gap-4 p-4">
+           {filteredLeads.map(lead => {
+             const score = calculateLeadScore(lead);
+             return (
+              <div key={lead.id} className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm relative overflow-hidden">
+                 {/* Lead Score Bar on left */}
+                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${score > 70 ? 'bg-green-500' : score > 40 ? 'bg-amber-500' : 'bg-slate-600'}`}></div>
+                 
+                 <div className="pl-3">
+                    <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-3">
                           <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleSelection(lead.id)} className="rounded border-slate-600 bg-slate-800" />
-                          <h3 className="text-white font-bold">{lead.brand} {lead.model}</h3>
+                          <div>
+                             <h3 className="text-white font-bold text-base">{lead.brand} {lead.model}</h3>
+                             <p className="text-xs text-slate-400 flex items-center mt-0.5">
+                                {getSourceIcon(lead.source)} {lead.source}
+                                <span className="mx-1">•</span>
+                                {new Date(lead.dateDetected).toLocaleDateString()}
+                             </p>
+                          </div>
                        </div>
-                       <p className="text-xs text-slate-400 mt-1">{getSourceIcon(lead.source)} {lead.source}</p>
+                       <div className="flex flex-col items-end gap-1">
+                          <div className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center ${lead.sentiment === 'HOT' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
+                             {lead.sentiment === 'HOT' && <Flame className="w-3 h-3 mr-1" />}
+                             {lead.sentiment}
+                          </div>
+                          <div className="flex items-center text-xs font-bold text-slate-500">
+                             <BarChart className="w-3 h-3 mr-1" /> Score: {score}
+                          </div>
+                       </div>
                     </div>
-                    <div className={`px-2 py-1 rounded text-xs font-bold border ${lead.sentiment === 'HOT' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
-                       {lead.sentiment}
-                    </div>
-                 </div>
-                 
-                 <p className="text-sm text-slate-300 mb-3">{lead.intentSummary}</p>
-                 
-                 {lead.contactName && (
-                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 mb-3">
-                       <p className="text-xs text-slate-500 uppercase font-bold mb-1">Contact</p>
-                       <p className="text-white text-sm">{lead.contactName}</p>
-                       {lead.contactPhone && <p className="text-blue-400 text-xs mt-1">{lead.contactPhone}</p>}
-                    </div>
-                 )}
-
-                 <div className="flex gap-2 mt-3">
-                    <button onClick={() => handleEditClick(lead)} className="flex-1 py-2 bg-slate-700 text-slate-300 rounded text-xs font-medium">Edit</button>
-                    {lead.contactEmail && <button onClick={() => handleGenerateScript(lead)} className="flex-1 py-2 bg-blue-600 text-white rounded text-xs font-medium">Email</button>}
-                    <button onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)} className="p-2 bg-slate-700 text-slate-300 rounded">
-                       {expandedLeadId === lead.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                 </div>
-                 
-                 {expandedLeadId === lead.id && (
-                    <div className="mt-3 pt-3 border-t border-slate-700 space-y-3">
+                    
+                    <p className="text-sm text-slate-300 mb-3 bg-slate-900/50 p-2 rounded border border-slate-800/50 italic">
+                       "{lead.intentSummary}"
+                    </p>
+                    
+                    {/* Status & Dealer Row */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
                        <div>
-                          <label className="text-xs text-slate-500">Status</label>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold">Status</label>
                           <select 
                              value={lead.status}
                              onChange={(e) => updateStatus(lead.id, e.target.value as LeadStatus)}
-                             className="w-full bg-slate-900 border border-slate-700 text-white rounded px-2 py-1 text-sm mt-1"
+                             className="w-full bg-slate-900 border border-slate-600 text-white rounded px-2 py-1.5 text-xs mt-1 focus:ring-1 focus:ring-blue-500"
                           >
                              {Object.values(LeadStatus).map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                        </div>
                        <div>
-                          <label className="text-xs text-slate-500">Assigned To</label>
-                          <div className="text-sm text-white">{dealers.find(d => d.id === lead.assignedDealerId)?.name || 'Unassigned'}</div>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold">Assigned Dealer</label>
+                          <button 
+                             onClick={() => handleAssignClick(lead.id)}
+                             className="w-full text-left bg-slate-900 border border-slate-600 text-blue-400 rounded px-2 py-1.5 text-xs mt-1 truncate hover:border-blue-500 transition-colors"
+                          >
+                             {dealers.find(d => d.id === lead.assignedDealerId)?.name || 'Unassigned (Tap to assign)'}
+                          </button>
                        </div>
-                       <a href={lead.groundingUrl} target="_blank" rel="noreferrer" className="block text-center w-full py-2 bg-slate-700 text-blue-400 rounded text-sm mt-2">
-                          View Original Source
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="flex items-center justify-between mb-4 pt-2 border-t border-slate-700/50">
+                       {lead.contactName || lead.contactPhone ? (
+                          <div className="flex flex-col">
+                             <span className="text-white text-sm font-medium">{lead.contactName || 'Unknown Name'}</span>
+                             <div className="flex items-center gap-3 mt-1">
+                                {lead.contactPhone && <a href={`tel:${lead.contactPhone}`} className="text-blue-400 text-xs flex items-center"><Phone className="w-3 h-3 mr-1"/> Call</a>}
+                                {lead.contactEmail && <a href={`mailto:${lead.contactEmail}`} className="text-blue-400 text-xs flex items-center"><Mail className="w-3 h-3 mr-1"/> Email</a>}
+                             </div>
+                          </div>
+                       ) : (
+                          <span className="text-xs text-slate-500 italic">No contact details</span>
+                       )}
+                       <button onClick={() => handleEditClick(lead)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700">
+                          <Edit2 className="w-4 h-4" />
+                       </button>
+                    </div>
+
+                    {/* Quick Actions Footer */}
+                    <div className="flex gap-2">
+                       {lead.contactEmail && (
+                          <button onClick={() => handleGenerateScript(lead)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center justify-center shadow-lg shadow-blue-900/20">
+                             <Send className="w-3 h-3 mr-1.5" /> Draft Email
+                          </button>
+                       )}
+                       <button onClick={() => handleReminderClick(lead.id)} className={`flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold flex items-center justify-center ${lead.followUpDate ? 'text-amber-400' : ''}`}>
+                          <Bell className="w-3 h-3 mr-1.5" /> {lead.followUpDate ? 'Reminder Set' : 'Remind Me'}
+                       </button>
+                       <a href={lead.groundingUrl} target="_blank" rel="noreferrer" className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center justify-center">
+                          <ExternalLink className="w-4 h-4" />
                        </a>
                     </div>
-                 )}
+                 </div>
               </div>
-           ))}
+           );
+           })}
         </div>
         
         {filteredLeads.length === 0 && (
@@ -640,6 +689,36 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
             <div className="flex justify-end gap-2 mt-4">
                <button onClick={() => setReminderLeadId(null)} className="px-4 py-2 text-slate-400">Cancel</button>
                <button onClick={saveReminder} className="px-4 py-2 bg-amber-600 text-white rounded">Set Reminder</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPIA INFO MODAL */}
+      {showComplianceInfo && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl">
+              <div className="flex items-center space-x-3">
+                <ShieldCheck className="w-6 h-6 text-green-400" />
+                <h3 className="text-xl font-bold text-white">POPIA Compliance</h3>
+              </div>
+              <button onClick={() => setShowComplianceInfo(false)} className="text-slate-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+               <div className="prose prose-invert prose-sm max-w-none text-slate-300">
+                  <div className="whitespace-pre-wrap">{POPIA_DISCLAIMER}</div>
+               </div>
+            </div>
+            <div className="p-6 border-t border-slate-700 flex justify-end bg-slate-900/50 rounded-b-xl">
+              <button 
+                onClick={() => setShowComplianceInfo(false)}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg font-bold"
+              >
+                Acknowledge
+              </button>
             </div>
           </div>
         </div>

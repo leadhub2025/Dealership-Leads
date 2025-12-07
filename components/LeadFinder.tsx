@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Search, Loader2, ExternalLink, Plus, Info, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, Target, AlertTriangle, X, Save, Eye, ShieldCheck, Globe, MessageCircle } from 'lucide-react';
-import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS } from '../constants';
+import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS, POPIA_DISCLAIMER } from '../constants';
 import { searchMarketLeads, generateOutreachScript } from '../services/geminiService';
 import { MarketInsight, Lead, LeadStatus, Dealership } from '../types';
 
@@ -31,6 +30,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
   const [results, setResults] = useState<MarketInsight[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showComplianceInfo, setShowComplianceInfo] = useState(false);
 
   // Script Modal State
   const [scriptModal, setScriptModal] = useState<{ open: boolean; script: string; loading: boolean; leadContext?: MarketInsight } | null>(null);
@@ -133,7 +133,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
 
   const confirmAddLead = () => {
     if (!verifyModal) return;
-    if (!popiaConfirmed) return; // Guard clause
+    if (!popiaConfirmed) return; // Guard clause to ensure checkbox is checked
 
     const { item, formData } = verifyModal;
     const brandName = NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand;
@@ -215,9 +215,20 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-3xl font-bold text-white mb-2">Lead Finder</h2>
-        <p className="text-slate-400">AI-powered market search to find in-market buyers from social, classifieds, and forums.</p>
+      <header className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2 flex items-center">
+            Lead Finder
+            <button 
+              onClick={() => setShowComplianceInfo(true)}
+              className="ml-3 text-slate-500 hover:text-green-400 transition-colors"
+              title="POPIA Compliance Info"
+            >
+              <ShieldCheck className="w-5 h-5" />
+            </button>
+          </h2>
+          <p className="text-slate-400">AI-powered market search to find in-market buyers from social, classifieds, and forums.</p>
+        </div>
       </header>
 
       {/* Search Form */}
@@ -524,6 +535,36 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                 className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPIA INFO MODAL */}
+      {showComplianceInfo && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl">
+              <div className="flex items-center space-x-3">
+                <ShieldCheck className="w-6 h-6 text-green-400" />
+                <h3 className="text-xl font-bold text-white">POPIA Compliance</h3>
+              </div>
+              <button onClick={() => setShowComplianceInfo(false)} className="text-slate-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+               <div className="prose prose-invert prose-sm max-w-none text-slate-300">
+                  <div className="whitespace-pre-wrap">{POPIA_DISCLAIMER}</div>
+               </div>
+            </div>
+            <div className="p-6 border-t border-slate-700 flex justify-end bg-slate-900/50 rounded-b-xl">
+              <button 
+                onClick={() => setShowComplianceInfo(false)}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg font-bold"
+              >
+                Acknowledge
               </button>
             </div>
           </div>
