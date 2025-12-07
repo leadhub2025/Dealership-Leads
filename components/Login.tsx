@@ -14,6 +14,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); 
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -111,6 +112,21 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="flex items-center space-x-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={keepSignedIn}
+                onChange={(e) => setKeepSignedIn(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-950 text-blue-600 focus:ring-offset-slate-900 focus:ring-blue-500 transition-colors"
+              />
+              <span className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">Keep me signed in</span>
+            </label>
+            <button type="button" className="text-sm text-blue-400 hover:text-blue-300 font-medium">
+              Forgot Password?
+            </button>
           </div>
 
           {error && (
