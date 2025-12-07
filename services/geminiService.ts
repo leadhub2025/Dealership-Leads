@@ -7,6 +7,92 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// Helper function to parse the structured text from Gemini
+const parseLeadsFromText = (text: string): MarketInsight[] => {
+  const leads: MarketInsight[] = [];
+  const parts = text.split("---LEAD_ITEM---");
+
+  for (const part of parts) {
+    if (!part.trim()) continue;
+
+    // Clean up markdown bolding from keys if present to ensure regex matches
+    const cleanPart = part.replace(/\*\*/g, "");
+
+    const topic = extractValue(cleanPart, "Topic");
+    if (!topic) continue;
+
+    const sourceUri = extractValue(cleanPart, "SourceURI") || "#";
+    const sourceTitle = extractValue(cleanPart, "SourceTitle") || "Search Result";
+
+    const lead: any = {
+      topic: topic,
+      sentiment: extractValue(cleanPart, "Sentiment") || "Warm",
+      summary: extractValue(cleanPart, "Summary") || "Details unavailable.",
+      sources: [{
+        title: sourceTitle,
+        uri: sourceUri
+      }],
+      sourcePlatform: extractValue(cleanPart, "SourcePlatform") || "Web",
+      contextDealer: extractValue(cleanPart, "ContextDealer") || "Unknown",
+      extractedContact: {
+        name: extractValue(cleanPart, "ContactName"),
+        phone: extractValue(cleanPart, "ContactPhone"),
+        email: extractValue(cleanPart, "ContactEmail")
+      }
+    };
+
+    // Clean N/A values
+    if (lead.extractedContact.name === "N/A") delete lead.extractedContact.name;
+    if (lead.extractedContact.phone === "N/A") delete lead.extractedContact.phone;
+    if (lead.extractedContact.email === "N/A") delete lead.extractedContact.email;
+
+    leads.push(lead as MarketInsight);
+  }
+  return leads;
+};
+
+const extractValue = (text: string, key: string): string => {
+  // Robust regex to capture value after Key:, handling case and potential whitespace
+  const regex = new RegExp(`${key}\\s*:\\s*(.*)`, "i");
+  const match = text.match(regex);
+  return match ? match[1].trim() : "";
+};
+
+/**
+ * Fallback function to generate realistic market data when live search fails
+ * or when the API key lacks search permissions.
+ */
+const generateSimulatedLeads = async (brand: string, model: string, region: string, type: string): Promise<MarketInsight[]> => {
+  const ai = getAiClient();
+  const prompt = `
+    Act as a lead generation engine. 
+    The live search tool is currently unavailable.
+    
+    Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model} in ${region}, South Africa.
+    These should look exactly like real search results from Facebook Marketplace or Gumtree.
+    
+    One should be "HOT" sentiment (Ready to buy/sell).
+    One should be "Warm".
+    
+    OUTPUT FORMATTING:
+    Same strict format as before. Separate with "---LEAD_ITEM---".
+    Keys: Topic, Sentiment, Summary, SourceTitle, SourceURI, SourcePlatform, ContextDealer, ContactName, ContactPhone, ContactEmail.
+    
+    Make the data look authentic (e.g. use South African names, realistic prices in ZAR, and typical mileage).
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+    return parseLeadsFromText(response.text || "");
+  } catch (e) {
+    console.error("Simulation failed", e);
+    return [];
+  }
+};
+
 export const searchMarketLeads = async (
   brand: string,
   model: string,
@@ -20,8 +106,6 @@ export const searchMarketLeads = async (
   const ai = getAiClient();
   
   // --- ALGORITHM STEP 1: QUERY CONSTRUCTION ---
-  // Construct the "highly specific query string" as defined in the system architecture.
-  
   const effectiveBrand = brand === 'Any' ? '' : brand;
   let coreVehicle = `${effectiveBrand} ${model}`.trim();
   if (trim) coreVehicle += ` ${trim}`;
@@ -110,41 +194,6 @@ export const searchMarketLeads = async (
     console.error("Lead Search Error (Falling back to simulation):", error);
     // Fallback to simulation ensures the user always gets a demo experience
     return await generateSimulatedLeads(brand, model, region, type);
-  }
-};
-
-/**
- * Fallback function to generate realistic market data when live search fails
- * or when the API key lacks search permissions.
- */
-const generateSimulatedLeads = async (brand: string, model: string, region: string, type: string): Promise<MarketInsight[]> => {
-  const ai = getAiClient();
-  const prompt = `
-    Act as a lead generation engine. 
-    The live search tool is currently unavailable.
-    
-    Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model} in ${region}, South Africa.
-    These should look exactly like real search results from Facebook Marketplace or Gumtree.
-    
-    One should be "HOT" sentiment (Ready to buy/sell).
-    One should be "Warm".
-    
-    OUTPUT FORMATTING:
-    Same strict format as before. Separate with "---LEAD_ITEM---".
-    Keys: Topic, Sentiment, Summary, SourceTitle, SourceURI, SourcePlatform, ContextDealer, ContactName, ContactPhone, ContactEmail.
-    
-    Make the data look authentic (e.g. use South African names, realistic prices in ZAR, and typical mileage).
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return parseLeadsFromText(response.text || "");
-  } catch (e) {
-    console.error("Simulation failed", e);
-    return [];
   }
 };
 
@@ -288,52 +337,4 @@ export const generatePitchScript = async (context: string): Promise<string> => {
     console.error("Pitch Script Error:", error);
     throw error;
   }
-};
-
-// Helper function to parse the structured text from Gemini
-const parseLeadsFromText = (text: string): MarketInsight[] => {
-  const leads: MarketInsight[] = [];
-  const parts = text.split("---LEAD_ITEM---");
-
-  for (const part of parts) {
-    if (!part.trim()) continue;
-
-    // Clean up markdown bolding from keys if present to ensure regex matches
-    const cleanPart = part.replace(/\*\*/g, "");
-
-    const topic = extractValue(cleanPart, "Topic");
-    if (!topic) continue;
-
-    const lead: any = {
-      topic: topic,
-      sentiment: extractValue(cleanPart, "Sentiment") || "Warm",
-      summary: extractValue(cleanPart, "Summary") || "Details unavailable.",
-      sources: [{
-        title: extractValue(cleanPart, "SourceTitle") || "Search Result",
-        uri: extractValue(cleanPart, "SourceURI") || "#"
-      }],
-      sourcePlatform: extractValue(cleanPart, "SourcePlatform") || "Web",
-      contextDealer: extractValue(cleanPart, "ContextDealer") || "Unknown",
-      extractedContact: {
-        name: extractValue(cleanPart, "ContactName"),
-        phone: extractValue(cleanPart, "ContactPhone"),
-        email: extractValue(cleanPart, "ContactEmail")
-      }
-    };
-
-    // Clean N/A values
-    if (lead.extractedContact.name === "N/A") delete lead.extractedContact.name;
-    if (lead.extractedContact.phone === "N/A") delete lead.extractedContact.phone;
-    if (lead.extractedContact.email === "N/A") delete lead.extractedContact.email;
-
-    leads.push(lead as MarketInsight);
-  }
-  return leads;
-};
-
-const extractValue = (text: string, key: string): string => {
-  // Robust regex to capture value after Key:, handling case and potential whitespace
-  const regex = new RegExp(`${key}\\s*:\\s*(.*)`, "i");
-  const match = text.match(regex);
-  return match ? match[1].trim() : "";
 };

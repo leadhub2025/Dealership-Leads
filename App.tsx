@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import { ViewState, Lead, LeadStatus, Dealership, User } from './types';
@@ -30,7 +31,7 @@ const App: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // --- Data Fetching Logic ---
+  // --- Session Check & Data Fetching Logic ---
   const loadData = useCallback(async () => {
     // We don't set global loading true here to allow background refreshes
     try {
@@ -45,15 +46,28 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Initial Load
+  // Initial Session Check
   useEffect(() => {
-    const init = async () => {
+    const checkSession = async () => {
       setLoading(true);
+      
+      // Check for saved session
+      const savedSession = localStorage.getItem('autolead_session');
+      if (savedSession) {
+        try {
+          const user = JSON.parse(savedSession);
+          setCurrentUser(user);
+        } catch (e) {
+          console.error("Failed to parse session", e);
+          localStorage.removeItem('autolead_session');
+        }
+      }
+      
       await loadData();
       setLoading(false);
     };
-    init();
-  }, [currentUser, loadData]); // Reload when user logs in
+    checkSession();
+  }, [loadData]);
 
 
   // --- Dealer Logic ---
@@ -108,6 +122,9 @@ const App: React.FC = () => {
         avatar: `https://ui-avatars.com/api/?name=${dealerWithBilling.id}`
       };
       
+      // Auto-save session on signup as well
+      localStorage.setItem('autolead_session', JSON.stringify(newUser));
+
       setCurrentUser(newUser);
       setView('DASHBOARD');
     } catch (e) {
@@ -121,6 +138,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     setView('DASHBOARD');
+    localStorage.removeItem('autolead_session');
   };
 
   // --- Lead Distribution Logic ---

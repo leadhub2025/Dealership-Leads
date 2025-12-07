@@ -70,8 +70,13 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
         transmission,
         mileage
       );
-      setResults(data);
+      if (data && Array.isArray(data)) {
+        setResults(data);
+      } else {
+        setResults([]);
+      }
     } catch (err) {
+      console.error("Search failed", err);
       setError("Failed to retrieve market data. Please try again.");
     } finally {
       setLoading(false);
@@ -82,8 +87,11 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     // Reset compliance check
     setPopiaConfirmed(false);
 
+    // Safeguard source URI
+    const uri = item.sources?.[0]?.uri || '#';
+
     // Check for existing lead by Source URI
-    const existingLead = leads.find(l => l.groundingUrl === item.sources[0].uri);
+    const existingLead = leads.find(l => l.groundingUrl === uri);
 
     if (existingLead) {
        // Logic for existing lead (same as before)
@@ -141,20 +149,20 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     const brandName = brand === 'Any' ? 'Unknown Brand' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
     
     // Use the specific source platform if detected, otherwise fallback to title
-    const specificSource = item.sourcePlatform || item.sources[0].title;
+    const specificSource = item.sourcePlatform || item.sources?.[0]?.title || 'Web Search';
 
     const newLead: Lead = {
       id: Math.random().toString(36).substr(2, 9),
       brand: brandName,
       model: `${model} ${trim}`.trim(),
       source: specificSource,
-      intentSummary: item.summary,
+      intentSummary: item.summary || 'No summary available',
       // Use full ISO string to capture time of day for scoring
       dateDetected: new Date().toISOString(), 
       status: LeadStatus.NEW,
-      sentiment: item.sentiment,
+      sentiment: item.sentiment || 'Warm',
       region: region,
-      groundingUrl: item.sources[0].uri,
+      groundingUrl: item.sources?.[0]?.uri || '#',
       contactName: formData.name,   // Use manual input
       contactPhone: formData.phone, // Use manual input
       contactEmail: formData.email, // Use manual input
@@ -191,7 +199,8 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     setScriptModal({ open: true, script: '', loading: true, leadContext: item });
     const brandName = brand === 'Any' ? 'Our Dealership' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
     try {
-      const script = await generateOutreachScript(item.summary, item.sourcePlatform || item.sources[0].title, brandName);
+      const source = item.sourcePlatform || item.sources?.[0]?.title || 'Web';
+      const script = await generateOutreachScript(item.summary, source, brandName);
       setScriptModal(prev => prev ? { ...prev, script, loading: false } : null);
     } catch (e) {
       setScriptModal(prev => prev ? { ...prev, script: "Error generating script.", loading: false } : null);
@@ -384,15 +393,21 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
           </div>
         )}
 
-        {!loading && results.length === 0 && !error && (
+        {!loading && (!results || results.length === 0) && !error && (
            <div className="text-center py-12 text-slate-500 bg-slate-900/30 rounded-xl border border-slate-800/50 border-dashed">
               <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p>No results yet. Start a search to find leads.</p>
            </div>
         )}
 
-        {results.map((item, idx) => {
-           const potentialScore = calculateInsightScore(item, region);
+        {results && results.map((item, idx) => {
+           // Safe call to scoring logic
+           let potentialScore = 0;
+           try {
+             potentialScore = calculateInsightScore(item, region);
+           } catch (e) {
+             potentialScore = 50; // default fallback
+           }
            
            return (
            <div key={idx} className="bg-slate-800 rounded-xl border border-slate-700 p-4 md:p-6 shadow-lg hover:border-blue-500/30 transition-all group">
@@ -414,7 +429,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                           <BarChart className="w-3 h-3 mr-1" /> Score: {potentialScore}
                        </span>
                     </div>
-                    <h3 className="text-lg font-bold text-white mb-2">{item.topic}</h3>
+                    <h3 className="text-lg font-bold text-white mb-2">{item.topic || 'Untitled Opportunity'}</h3>
                     <p className="text-slate-300 text-sm mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
                        "{item.summary}"
                     </p>
@@ -452,14 +467,16 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                     >
                        <MessageCircle className="w-4 h-4 mr-2" /> Draft Msg
                     </button>
-                    <a 
-                      href={item.sources[0].uri} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="flex-1 md:flex-none bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-4 py-2 rounded-lg font-medium text-sm border border-slate-600 flex items-center justify-center"
-                    >
-                       <ExternalLink className="w-4 h-4 mr-2" /> View Source
-                    </a>
+                    {item.sources && item.sources.length > 0 && (
+                      <a 
+                        href={item.sources[0].uri} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex-1 md:flex-none bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-4 py-2 rounded-lg font-medium text-sm border border-slate-600 flex items-center justify-center"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" /> View Source
+                      </a>
+                    )}
                  </div>
               </div>
            );

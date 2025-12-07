@@ -55,6 +55,14 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           dealerId: dealer.id,
           avatar: `https://ui-avatars.com/api/?name=${dealer.contactPerson}&background=0D8ABC&color=fff`
         };
+        
+        // Handle "Keep me signed in" logic
+        if (keepSignedIn) {
+          localStorage.setItem('autolead_session', JSON.stringify(user));
+        } else {
+          localStorage.removeItem('autolead_session');
+        }
+
         onLogin(user);
       } else {
         setError('Invalid credentials or no dealership found. Please try again.');
