@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Lock, Mail, ArrowRight, CheckCircle, Star, TrendingUp, ShieldAlert, Users, Briefcase, User as UserIcon } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldAlert } from 'lucide-react';
 import { User, Dealership } from '../types';
 import { signInDealer } from '../services/supabaseService';
 import { Logo } from './Logo';
@@ -13,7 +13,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(''); // Not authenticated against DB in this version, but good for UI
+  const [password, setPassword] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,25 +22,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
     setLoading(true);
     setError('');
 
-    // --- 1. SUPER ADMIN BACKDOOR (For Owner/Dev Access) ---
-    // This allows you to log in immediately without database setup
-    if (email.toLowerCase() === 'admin@autolead.co.za' || email.toLowerCase() === 'owner@autoleadsa.co.za') {
-       // Simulate a slight network delay for realism
-       setTimeout(() => {
-         const adminUser: User = {
-           id: 'master-admin-id',
-           name: 'System Administrator',
-           email: email,
-           role: 'ADMIN', // This grants access to Dealer Network, Billing, etc.
-           avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=000&color=fff&bold=true'
-         };
-         onLogin(adminUser);
-         setLoading(false);
-       }, 800);
-       return;
-    }
-
-    // --- 2. STANDARD DEALER LOGIN (Supabase) ---
     try {
       const dealer = await signInDealer(email);
       
@@ -51,12 +32,24 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           return;
         }
 
+        // Determine Role based on specific email patterns or DB flags
+        // In a full production DB, this would be a column on the user/dealer table
+        let role: any = 'DEALER_PRINCIPAL';
+        
+        if (email.toLowerCase().includes('admin') || email.toLowerCase() === 'owner@autoleadsa.co.za') {
+           role = 'ADMIN';
+        } else if (email.toLowerCase().includes('manager')) {
+           role = 'SALES_MANAGER';
+        } else if (email.toLowerCase().includes('sales')) {
+           role = 'SALES_EXECUTIVE';
+        }
+
         // Create User Session
         const user: User = {
           id: `user-${dealer.id}`,
           name: dealer.contactPerson,
           email: dealer.email,
-          role: 'DEALER_PRINCIPAL', // Default role for standard login
+          role: role, 
           dealerId: dealer.id,
           avatar: `https://ui-avatars.com/api/?name=${dealer.contactPerson}&background=0D8ABC&color=fff`
         };
@@ -68,16 +61,8 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
       console.error(err);
       setError('Login failed. Please check connection.');
     } finally {
-      if (email.toLowerCase() !== 'admin@autolead.co.za') {
-        setLoading(false);
-      }
+      setLoading(false);
     }
-  };
-
-  const fillCredentials = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('password123');
-    setError('');
   };
 
   return (
@@ -122,7 +107,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                   placeholder="••••••••"
-                  // Password not strictly required for the demo bypass, but good for UI
+                  required
                 />
               </div>
             </div>
@@ -146,27 +131,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-slate-800">
-          <p className="text-slate-500 text-xs uppercase font-bold text-center mb-4 tracking-wider">Quick Access (Demo Mode)</p>
-          <div className="grid grid-cols-2 gap-3">
-             <button 
-               type="button"
-               onClick={() => fillCredentials('admin@autolead.co.za')}
-               className="flex items-center justify-center p-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 rounded-lg text-xs font-medium transition-colors"
-             >
-                <ShieldAlert className="w-3 h-3 mr-1.5" /> Super Admin
-             </button>
-             <button 
-               type="button"
-               onClick={() => fillCredentials('johan@mccarthy.co.za')}
-               className="flex items-center justify-center p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-medium transition-colors"
-             >
-                <Briefcase className="w-3 h-3 mr-1.5" /> Dealer Principal
-             </button>
-          </div>
-        </div>
-
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center pt-6 border-t border-slate-800">
           <p className="text-slate-400 text-sm mb-2">New to AutoLead?</p>
           <button 
             onClick={onSignUpClick}

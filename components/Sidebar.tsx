@@ -17,8 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Simple check to see if Supabase URL is configured
-    // In a real app, we might ping the DB, but checking the client config is a good proxy for "Mode"
+    // Check if Supabase is configured
     const checkConnection = async () => {
       if (process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('placeholder')) {
         setIsConnected(true);
@@ -31,37 +30,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
   
   // Define all items with Role Based Access Control
   const allMenuItems: { id: ViewState; label: string; icon: any; roles: UserRole[] }[] = [
-    // Dashboard: Principals and Managers need overview stats. Executives might just focus on lists.
     { id: 'DASHBOARD', label: 'Overview', icon: LayoutDashboard, roles: ['ADMIN', 'DEALER_PRINCIPAL', 'SALES_MANAGER'] },
-    
-    // Lead Finder: Everyone can look for leads
     { id: 'LEAD_FINDER', label: 'Lead Finder', icon: Search, roles: ['ADMIN', 'DEALER_PRINCIPAL', 'SALES_MANAGER', 'SALES_EXECUTIVE'] },
-    
-    // My Leads: Everyone needs to work the CRM
     { id: 'MY_LEADS', label: 'My Leads CRM', icon: Users, roles: ['ADMIN', 'DEALER_PRINCIPAL', 'SALES_MANAGER', 'SALES_EXECUTIVE'] },
-    
-    // Dealer Network: Only Admins manage the network
     { id: 'DEALER_NETWORK', label: 'Dealer Network', icon: Network, roles: ['ADMIN'] },
-    
-    // Billing: Only Principals (Owners) and Admins see money
     { id: 'BILLING', label: 'Billing & Finance', icon: CreditCard, roles: ['ADMIN', 'DEALER_PRINCIPAL'] },
-    
-    // Marketing: Principals and Managers create campaigns
     { id: 'MARKETING', label: 'Marketing Kit', icon: Video, roles: ['ADMIN', 'DEALER_PRINCIPAL', 'SALES_MANAGER'] },
-    
-    // Compliance: Everyone must be compliant
     { id: 'POPIA_COMPLIANCE', label: 'Compliance (POPIA)', icon: ShieldCheck, roles: ['ADMIN', 'DEALER_PRINCIPAL', 'SALES_MANAGER', 'SALES_EXECUTIVE'] },
-    
-    // About: Everyone
     { id: 'ABOUT', label: 'About & Support', icon: Info, roles: ['ADMIN', 'DEALER_PRINCIPAL', 'SALES_MANAGER', 'SALES_EXECUTIVE'] },
   ];
 
-  // Filter based on role
   const menuItems = allMenuItems.filter(item => item.roles.includes(currentUser.role));
 
   const handleNavigation = (view: ViewState) => {
     setView(view);
-    // On mobile, close sidebar after selection
     if (window.innerWidth < 1024) {
       onClose();
     }
@@ -142,12 +124,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
         {/* System Status Footer */}
         <div className="mt-auto border-t border-slate-800 bg-slate-950/30">
           <div className="px-6 py-3">
-             <div className={`flex items-center space-x-2 text-xs font-medium ${isConnected ? 'text-green-400' : 'text-amber-500'}`}>
+             <div className={`flex items-center space-x-2 text-xs font-medium ${isConnected ? 'text-green-400' : 'text-slate-500'}`}>
                 {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                <span>System: {isConnected ? 'Cloud Connected' : 'Offline Demo Mode'}</span>
+                <span>System: {isConnected ? 'Cloud Connected' : 'Offline Mode'}</span>
              </div>
              {!isConnected && (
-                <p className="text-[10px] text-slate-600 mt-1 ml-5">Data saves to browser only.</p>
+                <p className="text-[10px] text-slate-600 mt-1 ml-5">Local storage active.</p>
              )}
           </div>
           

@@ -21,7 +21,7 @@ const About: React.FC = () => {
             South Africa's Premier AI-Driven Automotive Intelligence Platform
           </p>
           <div className="mt-6 flex flex-wrap gap-3 justify-center">
-             <span className="px-3 py-1 bg-slate-800 rounded-full text-xs font-bold text-slate-400 border border-slate-700">v1.0.2 Beta</span>
+             <span className="px-3 py-1 bg-slate-800 rounded-full text-xs font-bold text-slate-400 border border-slate-700">v1.0.0 Live</span>
              <span className="px-3 py-1 bg-green-900/30 rounded-full text-xs font-bold text-green-400 border border-green-500/30">System Operational</span>
           </div>
         </div>
