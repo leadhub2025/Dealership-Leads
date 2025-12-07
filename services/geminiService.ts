@@ -3,9 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import { MarketInsight } from "../types";
 
 const getAiClient = () => {
-  // Check both common naming conventions for the key
-  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("API Key not found");
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key not found. Ensure process.env.API_KEY is set.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -122,7 +121,7 @@ export const generateMarketingVideo = async (
   aspectRatio: '16:9' | '9:16'
 ): Promise<string | null> => {
     const ai = getAiClient();
-    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.API_KEY;
 
     try {
       let operation = await ai.models.generateVideos({

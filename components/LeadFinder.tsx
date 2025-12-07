@@ -1,8 +1,10 @@
+
 import React, { useState } from 'react';
-import { Search, Loader2, ExternalLink, Plus, Info, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, Target, AlertTriangle, X, Save, Eye, ShieldCheck, Globe, MessageCircle } from 'lucide-react';
+import { Search, Loader2, ExternalLink, Plus, Info, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, Target, AlertTriangle, X, Save, Eye, ShieldCheck, Globe, MessageCircle, BarChart } from 'lucide-react';
 import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS, POPIA_DISCLAIMER } from '../constants';
 import { searchMarketLeads, generateOutreachScript } from '../services/geminiService';
 import { MarketInsight, Lead, LeadStatus, Dealership } from '../types';
+import { calculateInsightScore } from '../services/scoringService';
 
 interface LeadFinderProps {
   onAddLead: (lead: Lead) => string | undefined; 
@@ -147,7 +149,8 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
       model: `${model} ${trim}`.trim(),
       source: specificSource,
       intentSummary: item.summary,
-      dateDetected: new Date().toISOString().split('T')[0],
+      // Use full ISO string to capture time of day for scoring
+      dateDetected: new Date().toISOString(), 
       status: LeadStatus.NEW,
       sentiment: item.sentiment,
       region: region,
@@ -313,8 +316,9 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
              <button 
                type="submit"
                disabled={loading}
-               className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-6 rounded-lg flex items-center shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+               className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-6 rounded-lg flex items-center shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all relative overflow-hidden"
              >
+               {loading && <span className="absolute inset-0 bg-white/20 animate-pulse"></span>}
                {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                {loading ? 'Analyzing Market...' : 'Find Leads'}
              </button>
@@ -385,7 +389,10 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
            </div>
         )}
 
-        {results.map((item, idx) => (
+        {results.map((item, idx) => {
+           const potentialScore = calculateInsightScore(item, region);
+           
+           return (
            <div key={idx} className="bg-slate-800 rounded-xl border border-slate-700 p-4 md:p-6 shadow-lg hover:border-blue-500/30 transition-all group">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                  <div className="flex-1">
@@ -400,6 +407,9 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                        )}
                        <span className="text-slate-500 text-xs flex items-center">
                           <MapPin className="w-3 h-3 mr-1" /> {region}
+                       </span>
+                       <span className="text-slate-500 text-xs flex items-center" title="Potential Lead Score">
+                          <BarChart className="w-3 h-3 mr-1" /> Score: {potentialScore}
                        </span>
                     </div>
                     <h3 className="text-lg font-bold text-white mb-2">{item.topic}</h3>
@@ -450,8 +460,8 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                     </a>
                  </div>
               </div>
-           </div>
-        ))}
+           );
+        })}
       </div>
 
       {/* Verify Lead Modal */}

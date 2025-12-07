@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, Dealership } from '../types';
 import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck } from 'lucide-react';
 import { NAAMSA_BRANDS, POPIA_DISCLAIMER } from '../constants';
 import { generateCSV, downloadCSV } from '../services/exportService';
 import { generateOutreachScript } from '../services/geminiService';
+import { calculateLeadScore } from '../services/scoringService';
 import { openNativeEmailClient, constructEmailSubject } from '../services/emailService';
 
 interface LeadListProps {
@@ -78,22 +80,6 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
     if (s.includes('4x4') || s.includes('community')) return <Users className="w-4 h-4 mr-1 text-emerald-500" />;
     if (s.includes('website') || s.includes('inquiry') || s.includes('web')) return <Laptop className="w-4 h-4 mr-1 text-purple-400" />;
     return <Globe className="w-4 h-4 mr-1 text-slate-400" />;
-  };
-
-  const calculateLeadScore = (lead: Lead) => {
-    let score = 0;
-    if (lead.sentiment === 'HOT') score += 40;
-    else if (lead.sentiment === 'Warm') score += 25;
-    else score += 10;
-    
-    if (lead.contactPhone) score += 30;
-    if (lead.contactEmail) score += 10;
-    
-    const daysDiff = Math.ceil(Math.abs(new Date().getTime() - new Date(lead.dateDetected).getTime()) / (1000 * 60 * 60 * 24));
-    if (daysDiff <= 3) score += 20;
-    else if (daysDiff <= 7) score += 10;
-    
-    return Math.min(score, 100);
   };
 
   // Filter Logic
@@ -327,7 +313,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
             </thead>
             <tbody className="divide-y divide-slate-700">
               {filteredLeads.map(lead => {
-                const score = calculateLeadScore(lead);
+                const score = calculateLeadScore(lead, dealers);
                 return (
                   <React.Fragment key={lead.id}>
                     <tr className={`hover:bg-slate-700/30 transition-colors ${lead.sentiment === 'HOT' ? 'bg-orange-500/5' : ''}`}>
@@ -356,7 +342,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                             score > 70 ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                             score > 40 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                             'bg-slate-700 text-slate-400 border-slate-600'
-                         }`}>
+                         }`} title="AI Score based on intent, time, and proximity">
                             <Flame className={`w-3 h-3 mr-1 ${score > 70 ? 'fill-green-400' : ''}`} /> {score}
                          </div>
                       </td>
@@ -424,7 +410,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
         {/* Mobile List - Optimized Card Layout */}
         <div className="md:hidden grid grid-cols-1 gap-4 p-4">
            {filteredLeads.map(lead => {
-             const score = calculateLeadScore(lead);
+             const score = calculateLeadScore(lead, dealers);
              return (
               <div key={lead.id} className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm relative overflow-hidden">
                  {/* Lead Score Bar on left */}
