@@ -8,7 +8,8 @@ import { Logo } from './components/Logo';
 
 // --- Lazy Load Components for Performance ---
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
-const LeadFinder = React.lazy(() => import('./components/LeadFinder'));
+// Explicitly cast the import to satisfy TypeScript's module resolution for default exports
+const LeadFinder = React.lazy(() => import('./components/LeadFinder') as Promise<{ default: React.ComponentType<any> }>);
 const LeadList = React.lazy(() => import('./components/LeadList'));
 const DealerNetwork = React.lazy(() => import('./components/DealerNetwork'));
 const Billing = React.lazy(() => import('./components/Billing'));
