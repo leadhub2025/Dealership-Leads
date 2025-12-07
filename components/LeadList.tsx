@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, Dealership } from '../types';
-import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck } from 'lucide-react';
+import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, ChevronRight, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck, MapPin } from 'lucide-react';
 import { NAAMSA_BRANDS, POPIA_DISCLAIMER } from '../constants';
 import { generateCSV, downloadCSV } from '../services/exportService';
 import { generateOutreachScript, generateFollowUpScript } from '../services/geminiService';
@@ -70,6 +71,11 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const toggleExpand = (id: string) => {
+    if (expandedLeadId === id) setExpandedLeadId(null);
+    else setExpandedLeadId(id);
   };
 
   const getSourceIcon = (source: string) => {
@@ -354,20 +360,25 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                         <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleSelection(lead.id)} className="rounded border-slate-600 bg-slate-800" />
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <div className="flex flex-col">
-                           <span className="font-bold text-white text-sm">{lead.brand} {lead.model}</span>
-                           <span className="text-xs text-slate-400 mt-1 line-clamp-1">{lead.intentSummary}</span>
-                           <div className="flex items-center mt-2 text-xs text-slate-500">
-                              {getSourceIcon(lead.source)} {lead.source}
-                              <span className="mx-2">•</span>
-                              {new Date(lead.dateDetected).toLocaleDateString()}
-                           </div>
-                           {lead.followUpDate && (
-                              <div className="flex items-center mt-1 text-xs text-amber-500">
-                                 <CalendarClock className="w-3 h-3 mr-1" />
-                                 Due: {new Date(lead.followUpDate).toLocaleDateString()}
+                        <div className="flex items-start gap-3">
+                           <button onClick={() => toggleExpand(lead.id)} className="text-slate-400 hover:text-white mt-1 shrink-0">
+                              {expandedLeadId === lead.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                           </button>
+                           <div className="flex flex-col">
+                              <span className="font-bold text-white text-sm">{lead.brand} {lead.model}</span>
+                              <span className="text-xs text-slate-400 mt-1 line-clamp-1">{lead.intentSummary}</span>
+                              <div className="flex items-center mt-2 text-xs text-slate-500">
+                                 {getSourceIcon(lead.source)} {lead.source}
+                                 <span className="mx-2">•</span>
+                                 {new Date(lead.dateDetected).toLocaleDateString()}
                               </div>
-                           )}
+                              {lead.followUpDate && (
+                                 <div className="flex items-center mt-1 text-xs text-amber-500">
+                                    <CalendarClock className="w-3 h-3 mr-1" />
+                                    Due: {new Date(lead.followUpDate).toLocaleDateString()}
+                                 </div>
+                              )}
+                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-4 align-top">
@@ -435,12 +446,72 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                             <button onClick={() => handleReminderClick(lead.id)} className={`p-2 bg-slate-700 hover:bg-amber-600 text-white rounded-lg transition-colors ${lead.followUpDate ? 'text-amber-400' : ''}`} title="Reminder">
                                <Bell className="w-4 h-4" />
                             </button>
-                            <a href={lead.groundingUrl} target="_blank" rel="noreferrer" className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors" title="View Source">
-                               <ExternalLink className="w-4 h-4" />
-                            </a>
                          </div>
                       </td>
                     </tr>
+                    {expandedLeadId === lead.id && (
+                      <tr className="bg-slate-900/50 border-b border-slate-700">
+                        <td colSpan={7} className="p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Map Section */}
+                            <div className="rounded-lg overflow-hidden border border-slate-700 h-64 relative bg-slate-800">
+                                 <div className="absolute top-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-1 rounded text-xs text-white flex items-center border border-slate-700">
+                                    <MapPin className="w-3 h-3 mr-1 text-blue-400" /> Detected Region: {lead.region}
+                                 </div>
+                                 <iframe 
+                                    width="100%" 
+                                    height="100%" 
+                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(lead.region + ", South Africa")}&t=&z=9&ie=UTF8&iwloc=&output=embed`}
+                                    frameBorder="0" 
+                                    scrolling="no" 
+                                    marginHeight={0} 
+                                    marginWidth={0}
+                                    className="opacity-80 hover:opacity-100 transition-opacity"
+                                 ></iframe>
+                            </div>
+                            
+                            {/* Details & Source */}
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-bold text-white flex items-center">
+                                    <Search className="w-5 h-5 mr-2 text-blue-400" /> Source Intelligence
+                                </h4>
+                                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                    <p className="text-sm text-slate-300 mb-2 font-medium">Original Context:</p>
+                                    <p className="text-sm text-slate-400 italic mb-4">"{lead.intentSummary}"</p>
+                                    
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <span className="text-xs font-bold uppercase text-slate-500">Platform:</span>
+                                        <span className="text-xs text-white bg-slate-700 px-2 py-1 rounded">{lead.source}</span>
+                                    </div>
+
+                                    <a 
+                                      href={lead.groundingUrl} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-blue-900/20"
+                                    >
+                                        <ExternalLink className="w-4 h-4 mr-2" /> Visit Original Listing
+                                    </a>
+                                </div>
+
+                                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                    <p className="text-sm text-slate-300 mb-2 font-medium">AI Analysis:</p>
+                                    <div className="grid grid-cols-2 gap-4 text-xs">
+                                        <div>
+                                            <span className="block text-slate-500">Sentiment</span>
+                                            <span className={`font-bold ${lead.sentiment === 'HOT' ? 'text-orange-400' : 'text-slate-300'}`}>{lead.sentiment}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-slate-500">Detected Date</span>
+                                            <span className="text-slate-300">{new Date(lead.dateDetected).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </React.Fragment>
                 );
               })}
@@ -527,7 +598,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                     </div>
 
                     {/* Quick Actions Footer */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mb-3">
                        {lead.contactEmail && (
                           <button 
                             onClick={() => handleGenerateScript(lead)} 
@@ -544,10 +615,48 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                        <button onClick={() => handleReminderClick(lead.id)} className={`flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold flex items-center justify-center ${lead.followUpDate ? 'text-amber-400' : ''}`}>
                           <Bell className="w-3 h-3 mr-1.5" /> {lead.followUpDate ? 'Reminder Set' : 'Remind Me'}
                        </button>
-                       <a href={lead.groundingUrl} target="_blank" rel="noreferrer" className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center justify-center">
-                          <ExternalLink className="w-4 h-4" />
-                       </a>
                     </div>
+                    
+                    {/* Expand Button Mobile */}
+                    <button 
+                       onClick={() => toggleExpand(lead.id)}
+                       className="w-full flex items-center justify-center py-2 text-xs text-slate-400 hover:text-white bg-slate-900/50 rounded border border-slate-800 hover:bg-slate-800 transition-colors"
+                    >
+                       {expandedLeadId === lead.id ? (
+                         <>Hide Details <ChevronUp className="w-3 h-3 ml-1" /></>
+                       ) : (
+                         <>View Map & Source <ChevronDown className="w-3 h-3 ml-1" /></>
+                       )}
+                    </button>
+                    
+                    {/* Expanded Mobile Content */}
+                    {expandedLeadId === lead.id && (
+                      <div className="mt-3 space-y-3 animate-in fade-in zoom-in-95">
+                         <div className="rounded-lg overflow-hidden border border-slate-700 h-40 relative bg-slate-800">
+                             <div className="absolute top-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-1 rounded text-xs text-white flex items-center border border-slate-700">
+                                <MapPin className="w-3 h-3 mr-1 text-blue-400" /> Region: {lead.region}
+                             </div>
+                             <iframe 
+                                width="100%" 
+                                height="100%" 
+                                src={`https://maps.google.com/maps?q=${encodeURIComponent(lead.region + ", South Africa")}&t=&z=9&ie=UTF8&iwloc=&output=embed`}
+                                frameBorder="0" 
+                                scrolling="no"
+                                marginHeight={0}
+                                marginWidth={0}
+                                className="opacity-80"
+                             ></iframe>
+                         </div>
+                         <a 
+                            href={lead.groundingUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="w-full flex items-center justify-center px-4 py-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors"
+                        >
+                            <ExternalLink className="w-3 h-3 mr-2" /> Open Source URL
+                        </a>
+                      </div>
+                    )}
                  </div>
               </div>
            );
