@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Loader2, ExternalLink, Plus, Info, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, Target, AlertTriangle, X, Save, Eye, ShieldCheck, Globe, MessageCircle, BarChart } from 'lucide-react';
-import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS, POPIA_DISCLAIMER } from '../constants';
+import { Search, Loader2, ExternalLink, Plus, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, AlertTriangle, X, MessageCircle, BarChart } from 'lucide-react';
+import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS } from '../constants';
 import { searchMarketLeads, generateOutreachScript } from '../services/geminiService';
 import { MarketInsight, Lead, LeadStatus, Dealership } from '../types';
 import { calculateInsightScore } from '../services/scoringService';
@@ -31,7 +31,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
   const [results, setResults] = useState<MarketInsight[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showComplianceInfo, setShowComplianceInfo] = useState(false);
 
   // Script Modal State
   const [scriptModal, setScriptModal] = useState<{ open: boolean; script: string; loading: boolean; leadContext?: MarketInsight } | null>(null);

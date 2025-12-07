@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, Dealership } from '../types';
-import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, ChevronRight, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck, MapPin } from 'lucide-react';
+import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, ChevronRight, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck, MapPin, Plus } from 'lucide-react';
 import { NAAMSA_BRANDS, POPIA_DISCLAIMER } from '../constants';
 import { generateCSV, downloadCSV } from '../services/exportService';
 import { generateOutreachScript, generateFollowUpScript } from '../services/geminiService';
@@ -524,115 +524,142 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
            {filteredLeads.map(lead => {
              const score = calculateLeadScore(lead, dealers);
              return (
-              <div key={lead.id} className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm relative overflow-hidden">
-                 {/* Lead Score Bar on left */}
-                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${score > 70 ? 'bg-green-500' : score > 40 ? 'bg-amber-500' : 'bg-slate-600'}`}></div>
+              <div key={lead.id} className="bg-slate-800 rounded-xl border border-slate-700 shadow-lg overflow-hidden relative">
+                 {/* Colored Left Border for Score/Status indication */}
+                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${score > 70 ? 'bg-gradient-to-b from-green-500 to-green-600' : score > 40 ? 'bg-gradient-to-b from-amber-500 to-amber-600' : 'bg-slate-600'}`}></div>
                  
-                 <div className="pl-3">
-                    <div className="flex justify-between items-start mb-2">
+                 <div className="p-4 pl-5">
+                    {/* Top Row: Brand + Selection */}
+                    <div className="flex justify-between items-start mb-3">
                        <div className="flex items-center gap-3">
-                          <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleSelection(lead.id)} className="rounded border-slate-600 bg-slate-800" />
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.includes(lead.id)} 
+                            onChange={() => toggleSelection(lead.id)} 
+                            className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-600 focus:ring-offset-slate-800" 
+                          />
                           <div>
-                             <h3 className="text-white font-bold text-base">{lead.brand} {lead.model}</h3>
-                             <p className="text-xs text-slate-400 flex items-center mt-0.5">
-                                {getSourceIcon(lead.source)} {lead.source}
-                                <span className="mx-1">•</span>
-                                {new Date(lead.dateDetected).toLocaleDateString()}
-                             </p>
+                             <h3 className="text-white font-bold text-lg leading-tight">{lead.brand} {lead.model}</h3>
+                             <div className="flex items-center gap-2 mt-1">
+                                 <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                    {lead.region}
+                                 </span>
+                                 <span className="text-xs text-slate-400 flex items-center">
+                                    {getSourceIcon(lead.source)} {lead.source}
+                                 </span>
+                             </div>
                           </div>
                        </div>
-                       <div className="flex flex-col items-end gap-1">
-                          <div className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center ${lead.sentiment === 'HOT' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
+                       {/* Score Badge */}
+                       <div className="flex flex-col items-end">
+                          <div className={`px-2 py-1 rounded text-xs font-bold border flex items-center shadow-sm ${lead.sentiment === 'HOT' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
                              {lead.sentiment === 'HOT' && <Flame className="w-3 h-3 mr-1" />}
-                             {lead.sentiment}
+                             {score}/100
                           </div>
-                          <div className="flex items-center text-xs font-bold text-slate-500">
-                             <BarChart className="w-3 h-3 mr-1" /> Score: {score}
-                          </div>
+                          <span className="text-[10px] text-slate-500 mt-1">{new Date(lead.dateDetected).toLocaleDateString()}</span>
                        </div>
                     </div>
                     
-                    <p className="text-sm text-slate-300 mb-3 bg-slate-900/50 p-2 rounded border border-slate-800/50 italic">
-                       "{lead.intentSummary}"
-                    </p>
+                    {/* Intent Summary Box */}
+                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 mb-4">
+                       <p className="text-sm text-slate-300 italic leading-relaxed">"{lead.intentSummary}"</p>
+                    </div>
                     
-                    {/* Status & Dealer Row */}
-                    <div className="grid grid-cols-2 gap-3 mb-3">
+                    {/* Status & Assignment Grid */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
                        <div>
-                          <label className="text-[10px] text-slate-500 uppercase font-bold">Status</label>
-                          <select 
-                             value={lead.status}
-                             onChange={(e) => updateStatus(lead.id, e.target.value as LeadStatus)}
-                             className="w-full bg-slate-900 border border-slate-600 text-white rounded px-2 py-1.5 text-xs mt-1 focus:ring-1 focus:ring-blue-500"
-                          >
-                             {Object.values(LeadStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Status</label>
+                          <div className="relative">
+                             <select 
+                                value={lead.status}
+                                onChange={(e) => updateStatus(lead.id, e.target.value as LeadStatus)}
+                                className="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-2 py-2 text-xs appearance-none focus:ring-1 focus:ring-blue-500"
+                             >
+                                {Object.values(LeadStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                             </select>
+                             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
+                          </div>
                        </div>
                        <div>
-                          <label className="text-[10px] text-slate-500 uppercase font-bold">Assigned Dealer</label>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Assigned To</label>
                           <button 
                              onClick={() => handleAssignClick(lead.id)}
-                             className="w-full text-left bg-slate-900 border border-slate-600 text-blue-400 rounded px-2 py-1.5 text-xs mt-1 truncate hover:border-blue-500 transition-colors"
+                             className="w-full text-left bg-slate-900 border border-slate-600 text-blue-400 rounded-lg px-2 py-2 text-xs truncate hover:border-blue-500 transition-colors flex justify-between items-center"
                           >
-                             {dealers.find(d => d.id === lead.assignedDealerId)?.name || 'Unassigned (Tap to assign)'}
+                             <span className="truncate">{dealers.find(d => d.id === lead.assignedDealerId)?.name || 'Assign Dealer'}</span>
+                             <Users className="w-3 h-3 shrink-0 ml-1" />
                           </button>
                        </div>
                     </div>
 
-                    {/* Contact Info */}
-                    <div className="flex items-center justify-between mb-4 pt-2 border-t border-slate-700/50">
+                    {/* Contact Information */}
+                    <div className="flex items-center justify-between py-3 border-t border-slate-700/50">
                        {lead.contactName || lead.contactPhone ? (
-                          <div className="flex flex-col">
-                             <span className="text-white text-sm font-medium">{lead.contactName || 'Unknown Name'}</span>
-                             <div className="flex items-center gap-3 mt-1">
-                                {lead.contactPhone && <a href={`tel:${lead.contactPhone}`} className="text-blue-400 text-xs flex items-center"><Phone className="w-3 h-3 mr-1"/> Call</a>}
-                                {lead.contactEmail && <a href={`mailto:${lead.contactEmail}`} className="text-blue-400 text-xs flex items-center"><Mail className="w-3 h-3 mr-1"/> Email</a>}
+                          <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                                {lead.contactName ? lead.contactName.charAt(0) : <User className="w-4 h-4" />}
+                             </div>
+                             <div>
+                                <p className="text-white text-sm font-semibold">{lead.contactName || 'Unknown Contact'}</p>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                   {lead.contactPhone && (
+                                     <a href={`tel:${lead.contactPhone}`} className="text-xs text-blue-400 flex items-center hover:underline">
+                                        <Phone className="w-3 h-3 mr-1" /> Call
+                                     </a>
+                                   )}
+                                   {lead.contactEmail && (
+                                     <a href={`mailto:${lead.contactEmail}`} className="text-xs text-blue-400 flex items-center hover:underline">
+                                        <Mail className="w-3 h-3 mr-1" /> Email
+                                     </a>
+                                   )}
+                                </div>
                              </div>
                           </div>
                        ) : (
-                          <span className="text-xs text-slate-500 italic">No contact details</span>
+                          <div className="flex items-center text-slate-500 text-xs italic">
+                             <User className="w-4 h-4 mr-2 opacity-50" /> No contact details yet
+                          </div>
                        )}
-                       <button onClick={() => handleEditClick(lead)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700">
+                       
+                       <button onClick={() => handleEditClick(lead)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
                           <Edit2 className="w-4 h-4" />
                        </button>
                     </div>
 
-                    {/* Quick Actions Footer */}
-                    <div className="flex gap-2 mb-3">
-                       {lead.contactEmail && (
-                          <button 
-                            onClick={() => handleGenerateScript(lead)} 
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center shadow-lg transition-colors ${
-                               lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED
-                               ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                               : 'bg-slate-700 hover:bg-slate-600 text-white'
-                            }`}
-                          >
-                             <Send className="w-3 h-3 mr-1.5" /> 
-                             {lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED ? 'Follow Up' : 'Draft Email'}
-                          </button>
-                       )}
-                       <button onClick={() => handleReminderClick(lead.id)} className={`flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold flex items-center justify-center ${lead.followUpDate ? 'text-amber-400' : ''}`}>
-                          <Bell className="w-3 h-3 mr-1.5" /> {lead.followUpDate ? 'Reminder Set' : 'Remind Me'}
+                    {/* Action Buttons (Large Touch Targets) */}
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                       <button 
+                         onClick={() => lead.contactEmail ? handleGenerateScript(lead) : handleEditClick(lead)} 
+                         className={`py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-md transition-all active:scale-95 ${
+                            lead.contactEmail 
+                            ? (lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED ? 'bg-blue-600 text-white' : 'bg-slate-700 text-white border border-slate-600')
+                            : 'bg-slate-800 text-slate-500 border border-slate-700 border-dashed'
+                         }`}
+                       >
+                          {lead.contactEmail ? (
+                             <><Send className="w-4 h-4 mr-2" /> {lead.status === LeadStatus.NEW ? 'Draft Email' : 'Follow Up'}</>
+                          ) : (
+                             <><Plus className="w-4 h-4 mr-2" /> Add Email</>
+                          )}
+                       </button>
+                       <button onClick={() => handleReminderClick(lead.id)} className={`py-2.5 rounded-lg text-sm font-bold flex items-center justify-center border transition-all active:scale-95 ${lead.followUpDate ? 'bg-amber-900/20 text-amber-400 border-amber-500/30' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
+                          <Bell className="w-4 h-4 mr-2" /> {lead.followUpDate ? 'Due: ' + new Date(lead.followUpDate).toLocaleDateString(undefined, {month:'numeric', day:'numeric'}) : 'Remind'}
                        </button>
                     </div>
                     
                     {/* Expand Button Mobile */}
                     <button 
                        onClick={() => toggleExpand(lead.id)}
-                       className="w-full flex items-center justify-center py-2 text-xs text-slate-400 hover:text-white bg-slate-900/50 rounded border border-slate-800 hover:bg-slate-800 transition-colors"
+                       className="w-full mt-3 flex items-center justify-center py-2 text-xs text-slate-500 hover:text-white border-t border-slate-700/50 hover:bg-slate-700/30 transition-colors"
                     >
-                       {expandedLeadId === lead.id ? (
-                         <>Hide Details <ChevronUp className="w-3 h-3 ml-1" /></>
-                       ) : (
-                         <>View Map & Source <ChevronDown className="w-3 h-3 ml-1" /></>
-                       )}
+                       {expandedLeadId === lead.id ? 'Close Details' : 'View Map & Source'} 
+                       {expandedLeadId === lead.id ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
                     </button>
                     
                     {/* Expanded Mobile Content */}
                     {expandedLeadId === lead.id && (
-                      <div className="mt-3 space-y-3 animate-in fade-in zoom-in-95">
-                         <div className="rounded-lg overflow-hidden border border-slate-700 h-40 relative bg-slate-800">
+                      <div className="pt-3 pb-2 border-t border-slate-700/50 animate-in slide-in-from-top-2">
+                         <div className="rounded-lg overflow-hidden border border-slate-700 h-40 relative bg-slate-800 mb-3">
                              <div className="absolute top-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-1 rounded text-xs text-white flex items-center border border-slate-700">
                                 <MapPin className="w-3 h-3 mr-1 text-blue-400" /> Region: {lead.region}
                              </div>
@@ -651,9 +678,9 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                             href={lead.groundingUrl} 
                             target="_blank" 
                             rel="noreferrer" 
-                            className="w-full flex items-center justify-center px-4 py-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors"
+                            className="w-full flex items-center justify-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-blue-400 border border-slate-600 rounded-lg text-xs font-bold transition-colors"
                         >
-                            <ExternalLink className="w-3 h-3 mr-2" /> Open Source URL
+                            <ExternalLink className="w-3 h-3 mr-2" /> Open Source Listing
                         </a>
                       </div>
                     )}
