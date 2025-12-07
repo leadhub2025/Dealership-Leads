@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
   return {
     plugins: [react()],
-    base: '/', // Changed to root for standard SPA routing compatibility
+    base: './', // Ensure relative path for assets to fix loading in subpaths/previews
     define: {
       'process.env': env
     },
