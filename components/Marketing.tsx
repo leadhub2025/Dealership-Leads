@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Video, FileText, Loader2, Play, Download, Copy, Check, Sparkles, Film, Maximize2, Settings2, Share2, Linkedin, Facebook, Twitter, MessageCircle } from 'lucide-react';
+import { Video, FileText, Loader2, Play, Download, Copy, Check, Sparkles, Film, Maximize2, Settings2, Share2, Linkedin, Facebook, Twitter, MessageCircle, AlertTriangle } from 'lucide-react';
 import { generateMarketingVideo, generatePitchScript } from '../services/geminiService';
 
 const TEMPLATES = [
@@ -45,6 +45,7 @@ const Marketing: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   // Script State
   const [scriptContext, setScriptContext] = useState('');
@@ -64,12 +65,43 @@ const Marketing: React.FC = () => {
     if (!videoPrompt) return;
     setIsGeneratingVideo(true);
     setGeneratedVideoUrl(null);
+    setVideoError(null);
+
+    // Check for Paid Key Requirement for Veo
+    if ((window as any).aistudio) {
+        try {
+            const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+            if (!hasKey) {
+                const success = await (window as any).aistudio.openSelectKey();
+                if (!success) {
+                    setVideoError("API Key selection cancelled. Veo requires a paid API Key.");
+                    setIsGeneratingVideo(false);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn("AI Studio Key Check failed", e);
+        }
+    }
+
     try {
       const url = await generateMarketingVideo(videoPrompt, resolution, aspectRatio);
-      if (url) setGeneratedVideoUrl(url);
-    } catch (error) {
+      if (url) {
+          setGeneratedVideoUrl(url);
+      } else {
+          setVideoError("Video generation completed but no URL was returned.");
+      }
+    } catch (error: any) {
       console.error("Video Gen Error", error);
-      alert("Failed to generate video. Ensure you have access to Veo in your API Key.");
+      if (error.message?.includes("entity was not found") || error.message?.includes("404")) {
+          setVideoError("Veo model access failed. Please ensure you have selected a valid project/key with Veo enabled.");
+           // Reset key if possible to force re-selection next time
+           if ((window as any).aistudio) {
+               // We can't programmatically reset, but we can prompt user
+           }
+      } else {
+          setVideoError("Failed to generate video. Please check your connection and API limits.");
+      }
     } finally {
       setIsGeneratingVideo(false);
     }
@@ -236,6 +268,13 @@ const Marketing: React.FC = () => {
                   />
                 </div>
                 
+                {videoError && (
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm flex items-start animate-in slide-in-from-top-2">
+                        <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0" />
+                        <span>{videoError}</span>
+                    </div>
+                )}
+
                 <button 
                   onClick={handleGenerateVideo}
                   disabled={isGeneratingVideo || !videoPrompt}

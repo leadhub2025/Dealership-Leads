@@ -13,7 +13,7 @@ interface LeadFinderProps {
   dealers?: Dealership[];
 }
 
-const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead, dealers }) => {
+export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: LeadFinderProps) {
   // Search Filters
   const [tier, setTier] = useState<string>('All');
   const [brand, setBrand] = useState(NAAMSA_BRANDS[0].id);
@@ -49,9 +49,10 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
   const [isAutoPilot, setIsAutoPilot] = useState(false);
   const [nextScanTime, setNextScanTime] = useState<Date | null>(null);
   const [scanLog, setScanLog] = useState<string[]>([]);
-  // Fix: NodeJS.Timeout is not available in browser environment without types/node. Using ReturnType<typeof setInterval>.
-  const autoPilotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // Refs for Intervals
+  const autoPilotIntervalRef = useRef<any>(null);
+  const countdownIntervalRef = useRef<any>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
 
   // Filter Brands by Tier
@@ -72,7 +73,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     
     // Logic: If brand is "Any", pick a random brand from the list to search this cycle
     let searchBrand = state.brand;
-    if (state.brand === 'Any') {
+    if (state.brand === 'Any' && state.filteredBrands.length > 0) {
       const randomIndex = Math.floor(Math.random() * state.filteredBrands.length);
       searchBrand = state.filteredBrands[randomIndex].id;
     }
@@ -81,9 +82,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     // Add to log
     const timestamp = new Date().toLocaleTimeString();
     setScanLog(prev => [`[${timestamp}] Scanning ${brandName} in ${state.region}...`, ...prev].slice(0, 5));
-    
-    // We don't use global loading state to avoid disrupting UI if user is interacting
-    // setLoading(true); 
     
     try {
       const data = await searchMarketLeads(
@@ -100,7 +98,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
       if (data && data.length > 0) {
         setResults(prevResults => {
            const existingUris = new Set(prevResults.map(p => p.sources?.[0]?.uri));
-           const newItems = data.filter(d => !existingUris.has(d.sources?.[0]?.uri));
+           const newItems = data.filter(d => d.sources?.[0]?.uri && !existingUris.has(d.sources[0].uri));
            
            if (newItems.length > 0) {
               setScanLog(prevLog => [`[${timestamp}] Found ${newItems.length} new leads!`, ...prevLog].slice(0, 5));
@@ -121,7 +119,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
   
   useEffect(() => {
     if (isAutoPilot) {
-      // Run first scan immediately if results are empty or just to start fresh
+      // Run first scan immediately
       handleAutoPilotCycle();
       
       // Set 15 minute interval (15 * 60 * 1000 = 900000ms)
@@ -140,7 +138,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
           const diff = prev.getTime() - Date.now();
           
           if (diff <= 0) {
-             // Timer reached zero, next cycle handles update, but strictly ensure display logic handles negative gracefully
              setTimeRemaining("Scanning...");
              return prev; 
           }
@@ -175,7 +172,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     setAddSuccess(null);
 
     try {
-      // Handle "Any" brand case
       const brandName = brand === 'Any' ? 'Any' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
       
       const data = await searchMarketLeads(
@@ -202,17 +198,11 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
   };
 
   const initiateAddLead = (item: MarketInsight) => {
-    // Reset compliance check
     setPopiaConfirmed(false);
-
-    // Safeguard source URI
     const uri = item.sources?.[0]?.uri || '#';
-
-    // Check for existing lead by Source URI
-    const existingLead = leads.find(l => l.groundingUrl === uri);
+    const existingLead = leads.find(l => l.groundingUrl === uri && uri !== '#');
 
     if (existingLead) {
-       // Logic for existing lead (same as before)
        const hasNewData = item.extractedContact && (
         (item.extractedContact.name && existingLead.contactName !== item.extractedContact.name) ||
         (item.extractedContact.phone && existingLead.contactPhone !== item.extractedContact.phone) ||
@@ -220,26 +210,15 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
       );
 
       if (hasNewData) {
-        if (existingLead.contactName || existingLead.contactPhone || existingLead.contactEmail) {
-          setConfirmOverwrite({
-            open: true,
-            leadId: existingLead.id,
-            newData: {
-              name: item.extractedContact.name,
-              phone: item.extractedContact.phone,
-              email: item.extractedContact.email
-            }
-          });
-        } else {
-          onUpdateLead(
-            existingLead.id, 
-            item.extractedContact.name || '', 
-            item.extractedContact.phone || '', 
-            item.extractedContact.email || ''
-          );
-          setAddSuccess("Lead updated with new contact details.");
-          setTimeout(() => setAddSuccess(null), 3000);
-        }
+        setConfirmOverwrite({
+          open: true,
+          leadId: existingLead.id,
+          newData: {
+            name: item.extractedContact.name,
+            phone: item.extractedContact.phone,
+            email: item.extractedContact.email
+          }
+        });
       } else {
         setAddSuccess("Lead already exists in CRM.");
         setTimeout(() => setAddSuccess(null), 3000);
@@ -247,7 +226,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
       return;
     }
 
-    // New Lead: Open Verification Modal
     setVerifyModal({
       open: true,
       item: item,
@@ -261,12 +239,11 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
 
   const confirmAddLead = () => {
     if (!verifyModal) return;
-    if (!popiaConfirmed) return; // Guard clause to ensure checkbox is checked
+    if (!popiaConfirmed) return;
 
     const { item, formData } = verifyModal;
     const brandName = brand === 'Any' ? 'Unknown Brand' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
     
-    // Use the specific source platform if detected, otherwise fallback to title
     const specificSource = item.sourcePlatform || item.sources?.[0]?.title || 'Web Search';
 
     const newLead: Lead = {
@@ -275,15 +252,14 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
       model: `${model} ${trim}`.trim(),
       source: specificSource,
       intentSummary: item.summary || 'No summary available',
-      // Use full ISO string to capture time of day for scoring
       dateDetected: new Date().toISOString(), 
       status: LeadStatus.NEW,
       sentiment: item.sentiment || 'Warm',
       region: region,
       groundingUrl: item.sources?.[0]?.uri || '#',
-      contactName: formData.name,   // Use manual input
-      contactPhone: formData.phone, // Use manual input
-      contactEmail: formData.email, // Use manual input
+      contactName: formData.name,
+      contactPhone: formData.phone,
+      contactEmail: formData.email,
       contextDealer: item.contextDealer
     };
 
@@ -297,20 +273,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     setAddSuccess(successMsg);
     setVerifyModal(null);
     setTimeout(() => setAddSuccess(null), 3000);
-  };
-
-  const confirmUpdate = () => {
-    if (confirmOverwrite) {
-      onUpdateLead(
-        confirmOverwrite.leadId, 
-        confirmOverwrite.newData.name || '', 
-        confirmOverwrite.newData.phone || '', 
-        confirmOverwrite.newData.email || ''
-      );
-      setConfirmOverwrite(null);
-      setAddSuccess("Lead contact details updated.");
-      setTimeout(() => setAddSuccess(null), 3000);
-    }
   };
 
   const handleGenerateScript = async (item: MarketInsight) => {
@@ -334,7 +296,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
   };
 
   const getPlatformBadgeColor = (platform: string = '') => {
-    const p = platform.toLowerCase();
+    const p = platform ? platform.toLowerCase() : '';
     if (p.includes('facebook group')) return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
     if (p.includes('marketplace')) return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
     if (p.includes('whatsapp')) return 'bg-green-500/20 text-green-300 border-green-500/30';
@@ -395,7 +357,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
            </div>
         </div>
         
-        {/* Activity Log */}
         {isAutoPilot && scanLog.length > 0 && (
            <div className="mt-4 pt-4 border-t border-indigo-500/20">
               <div className="flex items-center gap-2 text-xs text-indigo-400 font-bold mb-2">
@@ -421,7 +382,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                   value={tier}
                   onChange={(e) => {
                      setTier(e.target.value);
-                     // Reset brand if not in new tier
                      if (e.target.value !== 'All' && !NAAMSA_BRANDS.find(b => b.id === brand && b.tier === e.target.value)) {
                         setBrand(NAAMSA_BRANDS.filter(b => b.tier === e.target.value)[0].id);
                      }
@@ -462,7 +422,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                   placeholder="e.g. Ranger, SUV, Bakkie"
                 />
                 <datalist id="brand-models">
-                  {/* Show models if a specific brand is selected, otherwise show nothing or popular models */}
                   {brand !== 'Any' && (BRAND_MODELS[brand] || []).map(m => (
                     <option key={m} value={m} />
                   ))}
@@ -572,12 +531,18 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
         )}
 
         {results && results.map((item, idx) => {
-           // Safe call to scoring logic
+           // Skip rendering invalid items
+           if (!item) return null;
+           
+           // Defensive check for sources to prevent crash
+           const sourceUri = item.sources?.[0]?.uri || '#';
+           const displaySource = item.sources?.[0]?.title || item.sourcePlatform || 'Web';
+           
            let potentialScore = 0;
            try {
              potentialScore = calculateInsightScore(item, region);
            } catch (e) {
-             potentialScore = 50; // default fallback
+             potentialScore = 50; 
            }
            
            return (
@@ -605,7 +570,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                        "{item.summary}"
                     </p>
                     
-                    {/* Detected Contact Info */}
                     <div className="flex flex-wrap gap-4 text-xs text-slate-400 mb-4">
                        {item.extractedContact?.name && (
                           <span className="flex items-center bg-slate-900 px-2 py-1 rounded border border-slate-800">
@@ -638,9 +602,10 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                     >
                        <MessageCircle className="w-4 h-4 mr-2" /> Draft Msg
                     </button>
-                    {item.sources && item.sources.length > 0 && (
+                    {/* Source Link with Safety Check */}
+                    {sourceUri && sourceUri !== '#' && (
                       <a 
-                        href={item.sources[0].uri.startsWith('http') ? item.sources[0].uri : `https://${item.sources[0].uri}`}
+                        href={sourceUri.startsWith('http') ? sourceUri : `https://${sourceUri}`}
                         target="_blank" 
                         rel="noreferrer"
                         className="flex-1 md:flex-none bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-4 py-2 rounded-lg font-medium text-sm border border-slate-600 flex items-center justify-center"
@@ -702,7 +667,6 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                      </div>
                   </div>
                   
-                  {/* POPIA Compliance Check */}
                   <div className="pt-2">
                      <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg hover:bg-slate-700/50 border border-transparent hover:border-slate-600 transition-all">
                         <input 
@@ -769,6 +733,5 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
       )}
     </div>
   );
-};
-
-export default LeadFinder;
+}
+    

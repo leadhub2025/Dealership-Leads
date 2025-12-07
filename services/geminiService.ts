@@ -13,12 +13,13 @@ const parseLeadsFromText = (text: string): MarketInsight[] => {
   const parts = text.split("---LEAD_ITEM---");
 
   for (const part of parts) {
-    if (!part.trim()) continue;
+    if (!part || !part.trim()) continue;
 
     // Clean up markdown bolding from keys if present to ensure regex matches
     const cleanPart = part.replace(/\*\*/g, "");
 
     const topic = extractValue(cleanPart, "Topic");
+    // Defensive: If no topic is found, this block is likely invalid/empty
     if (!topic) continue;
 
     const sourceUri = extractValue(cleanPart, "SourceURI") || "#";
@@ -116,7 +117,6 @@ export const searchMarketLeads = async (
   if (transmission && transmission !== 'Any') attributes.push(transmission);
   
   // Define targeted sources and intent keywords
-  // Expanded to include Instagram, Twitter, LinkedIn for maximum coverage
   const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za OR site:instagram.com OR site:twitter.com OR site:linkedin.com";
   const intentKeywords = "(private seller OR owner OR urgent sale OR wanted OR looking for OR cash ready)";
   
@@ -288,8 +288,15 @@ export const generateMarketingVideo = async (
   resolution: '1080p' | '720p',
   aspectRatio: '16:9' | '9:16'
 ): Promise<string | null> => {
-    const ai = getAiClient();
+    // IMPORTANT: Veo models require a paid key. 
+    // This function assumes the key provided via process.env.API_KEY is valid 
+    // OR that the calling context has handled key selection via window.aistudio.
+    
+    // We create a fresh client here to ensure we pick up any runtime key changes
     const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API Key required for video generation");
+
+    const ai = new GoogleGenAI({ apiKey });
 
     try {
       let operation = await ai.models.generateVideos({
