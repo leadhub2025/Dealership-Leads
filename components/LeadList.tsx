@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, Dealership } from '../types';
 import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck } from 'lucide-react';
 import { NAAMSA_BRANDS, POPIA_DISCLAIMER } from '../constants';
 import { generateCSV, downloadCSV } from '../services/exportService';
-import { generateOutreachScript } from '../services/geminiService';
+import { generateOutreachScript, generateFollowUpScript } from '../services/geminiService';
 import { calculateLeadScore } from '../services/scoringService';
 import { openNativeEmailClient, constructEmailSubject } from '../services/emailService';
 
@@ -44,7 +43,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
   const [reminderForm, setReminderForm] = useState({ date: '', time: '' });
 
   // Email Modal State
-  const [emailModal, setEmailModal] = useState<{ open: boolean; leadId: string; to: string; subject: string; body: string; loading: boolean } | null>(null);
+  const [emailModal, setEmailModal] = useState<{ open: boolean; leadId: string; to: string; subject: string; body: string; loading: boolean; type: 'outreach' | 'followup' } | null>(null);
 
   // Compliance Info State
   const [showComplianceInfo, setShowComplianceInfo] = useState(false);
@@ -122,9 +121,39 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
   };
 
   const handleGenerateScript = async (lead: Lead) => {
-    setEmailModal({ open: true, leadId: lead.id, to: lead.contactEmail || '', subject: constructEmailSubject(lead.brand, lead.model), body: '', loading: true });
+    // Determine context based on status
+    const isFollowUp = lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED;
+    
+    // Construct Subject Line
+    const subject = isFollowUp 
+      ? `Following up: ${lead.brand} ${lead.model}`
+      : constructEmailSubject(lead.brand, lead.model);
+
+    setEmailModal({ 
+      open: true, 
+      leadId: lead.id, 
+      to: lead.contactEmail || '', 
+      subject: subject, 
+      body: '', 
+      loading: true,
+      type: isFollowUp ? 'followup' : 'outreach'
+    });
+
     try {
-      const script = await generateOutreachScript(lead.intentSummary, lead.source, lead.brand);
+      let script = '';
+      if (isFollowUp) {
+         // Generate Re-engagement Script
+         const dealer = dealers.find(d => d.id === lead.assignedDealerId);
+         script = await generateFollowUpScript(
+           lead.contactName || 'Customer',
+           `${lead.brand} ${lead.model}`,
+           dealer ? dealer.name : 'AutoLead SA'
+         );
+      } else {
+         // Generate Initial Outreach Script
+         script = await generateOutreachScript(lead.intentSummary, lead.source, lead.brand);
+      }
+      
       setEmailModal(prev => prev ? { ...prev, body: script, loading: false } : null);
     } catch (e) {
       setEmailModal(prev => prev ? { ...prev, body: "Could not generate script.", loading: false } : null);
@@ -134,6 +163,10 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
   const handleSendEmail = () => {
     if (!emailModal) return;
     openNativeEmailClient(emailModal.to, emailModal.subject, emailModal.body);
+    // Optionally update status to 'CONTACTED' if it was new
+    if (emailModal.type === 'outreach') {
+       updateStatus(emailModal.leadId, LeadStatus.CONTACTED);
+    }
     setEmailModal(null);
   };
 
@@ -387,7 +420,15 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                       <td className="px-4 py-4 align-top text-right">
                          <div className="flex justify-end gap-2">
                             {lead.contactEmail && (
-                               <button onClick={() => handleGenerateScript(lead)} className="p-2 bg-slate-700 hover:bg-blue-600 text-white rounded-lg transition-colors" title="Email">
+                               <button 
+                                 onClick={() => handleGenerateScript(lead)} 
+                                 className={`p-2 rounded-lg transition-colors border ${
+                                   lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED
+                                    ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500' 
+                                    : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600 hover:text-white'
+                                 }`}
+                                 title={lead.status === LeadStatus.NEW ? "Initial Outreach" : "Follow-up Email"}
+                               >
                                   <Send className="w-4 h-4" />
                                </button>
                             )}
@@ -488,8 +529,16 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                     {/* Quick Actions Footer */}
                     <div className="flex gap-2">
                        {lead.contactEmail && (
-                          <button onClick={() => handleGenerateScript(lead)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center justify-center shadow-lg shadow-blue-900/20">
-                             <Send className="w-3 h-3 mr-1.5" /> Draft Email
+                          <button 
+                            onClick={() => handleGenerateScript(lead)} 
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center shadow-lg transition-colors ${
+                               lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED
+                               ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                               : 'bg-slate-700 hover:bg-slate-600 text-white'
+                            }`}
+                          >
+                             <Send className="w-3 h-3 mr-1.5" /> 
+                             {lead.status === LeadStatus.CONTACTED || lead.status === LeadStatus.QUALIFIED ? 'Follow Up' : 'Draft Email'}
                           </button>
                        )}
                        <button onClick={() => handleReminderClick(lead.id)} className={`flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold flex items-center justify-center ${lead.followUpDate ? 'text-amber-400' : ''}`}>
@@ -632,7 +681,9 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
       {emailModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-lg">
-            <h3 className="text-xl font-bold text-white mb-4">Draft Outreach Email</h3>
+            <h3 className="text-xl font-bold text-white mb-4">
+               {emailModal.type === 'followup' ? 'Draft Follow-up Email' : 'Draft Outreach Email'}
+            </h3>
             {emailModal.loading ? (
                <div className="py-12 flex justify-center text-slate-400">
                   <Loader2 className="animate-spin mr-2" /> Generating personalized script...
@@ -649,7 +700,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                  </div>
                  <div>
                     <label className="text-xs text-slate-500 uppercase">Body</label>
-                    <textarea rows={6} value={emailModal.body} onChange={e => setEmailModal({...emailModal, body: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2" />
+                    <textarea rows={8} value={emailModal.body} onChange={e => setEmailModal({...emailModal, body: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2" />
                  </div>
                </div>
             )}

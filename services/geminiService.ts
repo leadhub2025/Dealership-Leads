@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { MarketInsight } from "../types";
 
@@ -113,6 +112,59 @@ export const generateOutreachScript = async (
   });
 
   return response.text || "Could not generate script.";
+};
+
+export const generateFollowUpScript = async (
+  contactName: string,
+  vehicleModel: string,
+  dealerName: string
+): Promise<string> => {
+  const ai = getAiClient();
+
+  const prompt = `
+    Write a polite, concise follow-up email to a potential customer who previously inquired about a vehicle.
+    Customer Name: ${contactName || 'Valued Customer'}
+    Vehicle Interest: ${vehicleModel}
+    Dealership: ${dealerName}
+
+    Goal: Re-engage the customer. Ask if they are still looking for a vehicle or if they would like to book a test drive.
+    Tone: Professional, non-intrusive, helpful.
+    Format: Email body text only.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+  });
+
+  return response.text || "Could not generate follow-up script.";
+};
+
+export const generateSocialPost = async (
+  leadData: { brand: string; model: string; summary: string; sentiment: string },
+  platform: 'LinkedIn' | 'Facebook' | 'Instagram' | 'Twitter'
+): Promise<string> => {
+  const ai = getAiClient();
+
+  const prompt = `
+    Act as a social media manager for a car dealership.
+    Generate a ${platform} post based on this high-intent market signal we just detected.
+
+    Vehicle: ${leadData.brand} ${leadData.model}
+    Market Context: "${leadData.summary}"
+    Sentiment: ${leadData.sentiment}
+
+    Goal: Alert our network that we have a buyer/seller match or that we are looking for stock to match this lead.
+    Tone: ${platform === 'LinkedIn' ? 'Professional and B2B focused' : 'Engaging, exciting, and consumer-focused'}.
+    Requirements: Include emojis and 3-5 relevant hashtags (e.g., #AutoLeadSA, #${leadData.brand.replace(/\s/g, '')}).
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+  });
+
+  return response.text || "Could not generate social post.";
 };
 
 export const generateMarketingVideo = async (
