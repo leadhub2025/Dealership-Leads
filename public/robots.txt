@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://autoleadsa.co.za/sitemap.xml
