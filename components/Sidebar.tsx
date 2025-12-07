@@ -44,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
 
   const handleNavigation = (view: ViewState) => {
     setView(view);
-    if (window.innerWidth < 1024) {
+    if (window.innerWidth < 768) {
       onClose();
     }
   };
@@ -64,22 +64,22 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
       {/* Mobile Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-slate-950/80 z-30 lg:hidden backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-slate-950/80 z-30 md:hidden backdrop-blur-sm transition-opacity"
           onClick={onClose}
         />
       )}
 
       {/* Sidebar Container */}
       <aside 
-        className={`fixed lg:static top-0 left-0 z-40 h-screen w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shrink-0 ${
+        className={`fixed md:static top-0 left-0 z-40 h-screen w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shrink-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
+        } md:translate-x-0`}
       >
         <div className="p-6 flex items-center justify-between border-b border-slate-800">
           <Logo className="w-8 h-8" showText={true} textSize="md" />
           <button 
             onClick={onClose}
-            className="lg:hidden text-slate-400 hover:text-white"
+            className="md:hidden text-slate-400 hover:text-white"
           >
             <X className="w-6 h-6" />
           </button>
