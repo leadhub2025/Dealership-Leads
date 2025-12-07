@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, Search, Users, ShieldCheck, Network, X, CreditCard, Video, LogOut, Wifi, WifiOff, Info } from 'lucide-react';
 import { ViewState, User, UserRole } from '../types';
@@ -14,11 +13,20 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose, currentUser, onLogout }) => {
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(navigator.onLine);
 
   useEffect(() => {
-    // Activate Online Live status
-    setIsConnected(true);
+    // Real-time network status detection for production
+    const handleOnline = () => setIsConnected(true);
+    const handleOffline = () => setIsConnected(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
   
   // Define all items with Role Based Access Control
@@ -117,9 +125,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
         {/* System Status Footer */}
         <div className="mt-auto border-t border-slate-800 bg-slate-950/30">
           <div className="px-6 py-3">
-             <div className={`flex items-center space-x-2 text-xs font-medium ${isConnected ? 'text-green-400' : 'text-slate-500'}`}>
+             <div className={`flex items-center space-x-2 text-xs font-medium ${isConnected ? 'text-green-400' : 'text-red-500'}`}>
                 {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <WifiOff className="w-3 h-3" />}
-                <span>System: {isConnected ? 'Online & Live' : 'Offline Mode'}</span>
+                <span>System: {isConnected ? 'Online & Live' : 'Offline'}</span>
              </div>
              {!isConnected && (
                 <p className="text-[10px] text-slate-600 mt-1 ml-5">Local storage active.</p>
