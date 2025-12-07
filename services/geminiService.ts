@@ -20,7 +20,10 @@ export const searchMarketLeads = async (
   const ai = getAiClient();
   
   // Construct specific vehicle string with high detail
-  let vehicleQuery = `${type} ${brand} ${model}`;
+  // If Brand is 'Any' or empty, we rely solely on the Model/Keyword for the search
+  const effectiveBrand = brand === 'Any' ? '' : brand;
+  let vehicleQuery = `${type} ${effectiveBrand} ${model}`.replace(/\s+/g, ' ').trim();
+  
   if (trim) vehicleQuery += ` ${trim}`;
   if (fuel && fuel !== 'Any') vehicleQuery += ` ${fuel}`;
   if (transmission && transmission !== 'Any') vehicleQuery += ` ${transmission}`;

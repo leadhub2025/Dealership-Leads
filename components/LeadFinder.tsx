@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Search, Loader2, ExternalLink, Plus, Info, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, Target, AlertTriangle, X, Save, Eye, ShieldCheck, Globe, MessageCircle, BarChart } from 'lucide-react';
 import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS, POPIA_DISCLAIMER } from '../constants';
@@ -59,7 +58,9 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     setAddSuccess(null);
 
     try {
-      const brandName = NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand;
+      // Handle "Any" brand case
+      const brandName = brand === 'Any' ? 'Any' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
+      
       const data = await searchMarketLeads(
         brandName, 
         model, 
@@ -138,7 +139,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
     if (!popiaConfirmed) return; // Guard clause to ensure checkbox is checked
 
     const { item, formData } = verifyModal;
-    const brandName = NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand;
+    const brandName = brand === 'Any' ? 'Unknown Brand' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
     
     // Use the specific source platform if detected, otherwise fallback to title
     const specificSource = item.sourcePlatform || item.sources[0].title;
@@ -189,7 +190,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
 
   const handleGenerateScript = async (item: MarketInsight) => {
     setScriptModal({ open: true, script: '', loading: true, leadContext: item });
-    const brandName = NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand;
+    const brandName = brand === 'Any' ? 'Our Dealership' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
     try {
       const script = await generateOutreachScript(item.summary, item.sourcePlatform || item.sources[0].title, brandName);
       setScriptModal(prev => prev ? { ...prev, script, loading: false } : null);
@@ -263,6 +264,7 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
                   onChange={(e) => setBrand(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
+                  <option value="Any">Any / All Brands</option>
                   {filteredBrands.map(b => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
@@ -271,17 +273,18 @@ const LeadFinder: React.FC<LeadFinderProps> = ({ onAddLead, leads, onUpdateLead,
 
              {/* Model Input */}
              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Model</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Model / Keyword</label>
                 <input 
                   type="text" 
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   list="brand-models"
                   className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="e.g. Ranger / Polo"
+                  placeholder="e.g. Ranger, SUV, Bakkie"
                 />
                 <datalist id="brand-models">
-                  {(BRAND_MODELS[brand] || []).map(m => (
+                  {/* Show models if a specific brand is selected, otherwise show nothing or popular models */}
+                  {brand !== 'Any' && (BRAND_MODELS[brand] || []).map(m => (
                     <option key={m} value={m} />
                   ))}
                 </datalist>
