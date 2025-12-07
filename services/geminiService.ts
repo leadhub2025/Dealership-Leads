@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { MarketInsight } from "../types";
 
 const getAiClient = () => {
@@ -116,11 +116,12 @@ export const searchMarketLeads = async (
   if (transmission && transmission !== 'Any') attributes.push(transmission);
   
   // Define targeted sources and intent keywords
-  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za";
+  // Expanded to include Instagram, Twitter, LinkedIn for maximum coverage
+  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za OR site:instagram.com OR site:twitter.com OR site:linkedin.com";
   const intentKeywords = "(private seller OR owner OR urgent sale OR wanted OR looking for OR cash ready)";
   
-  // The Master Query String
-  const constructedQuery = `"${coreVehicle}" ${attributes.join(' ')} ${region} ${intentKeywords} ${siteOperators}`;
+  // The Master Query String - Added "past month" to encourage freshness
+  const constructedQuery = `"${coreVehicle}" ${attributes.join(' ')} ${region} ${intentKeywords} ${siteOperators} after:${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`;
 
   let mileageContext = "";
   if (mileage && (mileage.min || mileage.max)) {
@@ -137,7 +138,7 @@ export const searchMarketLeads = async (
     
     SEARCH OBJECTIVES:
     1. Classified Listings (Gumtree, JunkMail, AutoTrader, Cars.co.za)
-    2. Social Media (Facebook Marketplace, Public Groups like "VW Club SA", "4x4 Community")
+    2. Social Media (Facebook Marketplace, Instagram, X/Twitter, Public Groups)
     3. Forum Discussions (MyBroadband, 4x4Community)
     
     CRITICAL INSTRUCTIONS:
@@ -145,6 +146,7 @@ export const searchMarketLeads = async (
     - Look for "WANTED" or "LOOKING FOR" posts (Buyer Leads).
     - EXCLUDE listings from major aggregator dealerships if possible; focus on private market signals.
     - ${trim ? `MUST match the specific variant: "${trim}"` : 'Ensure results match the model specs.'}
+    - PRIORITIZE recent listings (past 30 days).
     
     OUTPUT FORMATTING:
     You must output the data in a strict, parsed format.
@@ -156,8 +158,8 @@ export const searchMarketLeads = async (
     Sentiment: ["HOT" (Active Buyer/Seller - Urgent/Cash), "Warm" (Researching/Trade-in), "Cold"]
     Summary: [Key details: Price, Year, Mileage, and Condition]
     SourceTitle: [Name of the site, e.g. "Facebook Marketplace"]
-    SourceURI: [Direct URL to the listing/post]
-    SourcePlatform: [e.g. "Facebook", "Gumtree", "Forum", "Other"]
+    SourceURI: [COPY THE EXACT URL FOUND in the search result. Do not invent a URL.]
+    SourcePlatform: [e.g. "Facebook", "Gumtree", "Forum", "Instagram", "Other"]
     ContextDealer: [Seller Name or "Private Seller"]
     ContactName: [Name if publicly available, else "N/A"]
     ContactPhone: [Phone if publicly available, else "N/A"]
@@ -172,15 +174,19 @@ export const searchMarketLeads = async (
         tools: [{ googleSearch: {} }],
         // Critical: Disable safety filters to allow processing of public contact info (PII)
         safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
         ]
       }
     });
 
     const text = response.text || "";
+    
+    // Debug: Log grounding metadata to verify search hits in console
+    console.log("Grounding Metadata:", response.candidates?.[0]?.groundingMetadata);
+
     const leads = parseLeadsFromText(text);
 
     if (leads.length === 0) {
