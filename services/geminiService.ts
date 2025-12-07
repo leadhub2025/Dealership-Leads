@@ -21,7 +21,7 @@ export const searchMarketLeads = async (
 ): Promise<MarketInsight[]> => {
   const ai = getAiClient();
   
-  // Construct specific vehicle string
+  // Construct specific vehicle string with high detail
   let vehicleQuery = `${type} ${brand} ${model}`;
   if (trim) vehicleQuery += ` ${trim}`;
   if (fuel && fuel !== 'Any') vehicleQuery += ` ${fuel}`;
@@ -33,36 +33,43 @@ export const searchMarketLeads = async (
     mileageContext = `Mileage preference: ${mileage.min || '0'}km to ${mileage.max || 'any'}km.`;
   }
 
+  // Improved Prompt Engineering for better data retrieval
   const prompt = `
-    I need to find potential vehicle sales leads for a dealership in South Africa.
-    Search for recent (last 30 days) classified listings, forum discussions (e.g. 4x4community, mybroadband), or public social media posts for:
-    Vehicle: ${vehicleQuery}
-    Location: ${region}, South Africa
+    Act as an expert automotive market researcher in South Africa.
+    
+    TASK:
+    Conduct a comprehensive search for active vehicle opportunities for a dealership in ${region}.
+    Target Vehicle: ${vehicleQuery}
     ${mileageContext}
     
-    Goal: Identify people looking to BUY. 
-    ${trim ? `CRITICAL: The buyer must be looking for the specific trim/variant: "${trim}". Filter out results that are the base model if this spec is requested.` : ''}
+    SEARCH OBJECTIVES:
+    Use Google Search to find real-time, recent (last 30 days) opportunities from:
+    1. Classified Listings (Private sellers on Gumtree, JunkMail, Private Property, etc.)
+    2. Social Media (Facebook Marketplace, Facebook Groups like "VW Club SA", "4x4 Community")
+    3. Forum Discussions (MyBroadband, 4x4Community, CarForums)
     
-    SPECIAL INSTRUCTION: Analyze the Source URL and Snippet carefully to identify the SPECIFIC Platform.
-    - If it's a Facebook URL, try to detect if it is a "Marketplace Listing" or a specific "Facebook Group" (e.g., VW Club SA).
-    - Differentiate between "AutoTrader", "Cars.co.za", "Gumtree", "WeBuyCars".
-    - Identify if it is a "WhatsApp Community" invite or discussion.
+    CRITICAL INSTRUCTIONS:
+    - Look for "FOR SALE" listings by private individuals (potential stock acquisition).
+    - Look for "WANTED" or "LOOKING FOR" posts (potential buyers).
+    - EXCLUDE listings from major aggregator dealerships if possible; focus on private market signals.
+    - ${trim ? `MUST match the specific variant: "${trim}"` : 'Ensure results match the model specs.'}
     
-    Analyze the search results. For each relevant lead found, extract the following information.
-    If specific contact details (Name, Phone, Email) are visible in the snippet or title, extract them.
-
-    STRICTLY FORMAT THE OUTPUT as a list where each item is separated by "---LEAD_ITEM---".
-    Inside each item use these exact keys:
-    Topic: [Short Title]
-    Sentiment: [If User is looking to BUY a USED vehicle, set to "HOT". Else "Warm" or "Cold"]
-    Summary: [1 sentence summary of intent including specs found]
-    SourceTitle: [Website Name]
-    SourceURI: [The URL]
-    SourcePlatform: [The specific platform type e.g., "Facebook Group", "Facebook Marketplace", "4x4Community Forum", "AutoTrader Listing"]
-    ContextDealer: [If a specific dealer name is mentioned in the snippet, extract it. Else "N/A"]
-    ContactName: [Extracted Name or "N/A"]
-    ContactPhone: [Extracted Phone Number or "N/A"]
-    ContactEmail: [Extracted Email Address or "N/A"]
+    OUTPUT FORMATTING:
+    You must output the data in a strict, parsed format.
+    Do NOT include any conversational filler text. Start immediately with the items.
+    Separate each result block with exactly: "---LEAD_ITEM---"
+    
+    For each item, strictly use these keys:
+    Topic: [Brief Title, e.g. "2023 Ford Ranger Wildtrak - Private Sale"]
+    Sentiment: ["HOT" (Active Buyer/Seller), "Warm" (Researching), "Cold"]
+    Summary: [Key details: Price, Year, Mileage, and Condition]
+    SourceTitle: [Name of the site, e.g. "Facebook Marketplace"]
+    SourceURI: [Direct URL to the listing/post]
+    SourcePlatform: [e.g. "Facebook", "Gumtree", "Forum", "Other"]
+    ContextDealer: [Seller Name or "Private Seller"]
+    ContactName: [Name if publicly available, else "N/A"]
+    ContactPhone: [Phone if publicly available, else "N/A"]
+    ContactEmail: [Email if publicly available, else "N/A"]
   `;
 
   try {
@@ -179,32 +186,42 @@ const parseLeadsFromText = (text: string): MarketInsight[] => {
   for (const part of parts) {
     if (!part.trim()) continue;
 
+    // Clean up markdown bolding from keys if present to ensure regex matches
+    const cleanPart = part.replace(/\*\*/g, "");
+
+    const topic = extractValue(cleanPart, "Topic");
+    if (!topic) continue;
+
     const lead: any = {
-      topic: extractValue(part, "Topic"),
-      sentiment: extractValue(part, "Sentiment"),
-      summary: extractValue(part, "Summary"),
+      topic: topic,
+      sentiment: extractValue(cleanPart, "Sentiment") || "Warm",
+      summary: extractValue(cleanPart, "Summary") || "Details unavailable.",
       sources: [{
-        title: extractValue(part, "SourceTitle") || "Unknown Source",
-        uri: extractValue(part, "SourceURI") || "#"
+        title: extractValue(cleanPart, "SourceTitle") || "Search Result",
+        uri: extractValue(cleanPart, "SourceURI") || "#"
       }],
-      sourcePlatform: extractValue(part, "SourcePlatform"),
-      contextDealer: extractValue(part, "ContextDealer"),
+      sourcePlatform: extractValue(cleanPart, "SourcePlatform") || "Web",
+      contextDealer: extractValue(cleanPart, "ContextDealer") || "Unknown",
       extractedContact: {
-        name: extractValue(part, "ContactName") !== "N/A" ? extractValue(part, "ContactName") : undefined,
-        phone: extractValue(part, "ContactPhone") !== "N/A" ? extractValue(part, "ContactPhone") : undefined,
-        email: extractValue(part, "ContactEmail") !== "N/A" ? extractValue(part, "ContactEmail") : undefined
+        name: extractValue(cleanPart, "ContactName"),
+        phone: extractValue(cleanPart, "ContactPhone"),
+        email: extractValue(cleanPart, "ContactEmail")
       }
     };
 
-    if (lead.topic) {
-      leads.push(lead as MarketInsight);
-    }
+    // Clean N/A values
+    if (lead.extractedContact.name === "N/A") delete lead.extractedContact.name;
+    if (lead.extractedContact.phone === "N/A") delete lead.extractedContact.phone;
+    if (lead.extractedContact.email === "N/A") delete lead.extractedContact.email;
+
+    leads.push(lead as MarketInsight);
   }
   return leads;
 };
 
 const extractValue = (text: string, key: string): string => {
-  const regex = new RegExp(`${key}:\\s*(.*)`, "i");
+  // Robust regex to capture value after Key:, handling case and potential whitespace
+  const regex = new RegExp(`${key}\\s*:\\s*(.*)`, "i");
   const match = text.match(regex);
   return match ? match[1].trim() : "";
 };

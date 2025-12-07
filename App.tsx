@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import { ViewState, Lead, LeadStatus, Dealership, User } from './types';
@@ -28,6 +27,7 @@ const App: React.FC = () => {
   // --- State Management (Now sourced from DB) ---
   const [dealers, setDealers] = useState<Dealership[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // --- Data Fetching Logic ---
   const loadData = useCallback(async () => {
@@ -104,7 +104,7 @@ const App: React.FC = () => {
         email: dealerWithBilling.email,
         role: 'DEALER_PRINCIPAL', // Default for new signups
         dealerId: dealerWithBilling.id,
-        avatar: `https://i.pravatar.cc/150?u=${dealerWithBilling.id}`
+        avatar: `https://ui-avatars.com/api/?name=${dealerWithBilling.id}`
       };
       
       setCurrentUser(newUser);
@@ -191,4 +191,216 @@ const App: React.FC = () => {
     }
 
     if (matchedDealer) {
-      
+      return { 
+        ...lead, 
+        assignedDealerId: matchedDealer.id, 
+        assignmentType: assignmentType 
+      };
+    }
+
+    // No dealer found - keep unassigned
+    return lead;
+  };
+
+  const handleAddLead = (lead: Lead) => {
+    // 1. Run Distribution Logic
+    const distributedLead = distributeLead(lead);
+
+    // 2. Optimistic UI Update
+    setLeads(prev => [distributedLead, ...prev]);
+
+    // 3. DB Persist
+    createLead(distributedLead).then(() => {
+       // 4. Update Dealer Stats if assigned
+       if (distributedLead.assignedDealerId) {
+          const dealer = dealers.find(d => d.id === distributedLead.assignedDealerId);
+          if (dealer) {
+             const newCount = (dealer.leadsAssigned || 0) + 1;
+             const newBill = dealer.billing.currentUnbilledAmount + dealer.billing.costPerLead;
+             const newTotal = dealer.billing.totalSpent + dealer.billing.costPerLead;
+             
+             handleUpdateDealership({
+                ...dealer,
+                leadsAssigned: newCount,
+                billing: {
+                   ...dealer.billing,
+                   currentUnbilledAmount: newBill,
+                   totalSpent: newTotal
+                }
+             });
+          }
+       }
+    });
+
+    return distributedLead.assignedDealerId;
+  };
+
+  const handleUpdateLeadStatus = async (id: string, status: LeadStatus) => {
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+    await updateLead(id, { status });
+  };
+  
+  const handleBulkUpdateLeadStatus = async (ids: string[], status: LeadStatus) => {
+    setLeads(prev => prev.map(l => ids.includes(l.id) ? { ...l, status } : l));
+    // Supabase naive implementation loop (in prod use 'in' query)
+    for (const id of ids) {
+       await updateLead(id, { status });
+    }
+  };
+
+  const handleUpdateLeadContact = async (id: string, name: string, phone: string, email: string) => {
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, contactName: name, contactPhone: phone, contactEmail: email } : l));
+    await updateLead(id, { contactName: name, contactPhone: phone, contactEmail: email });
+  };
+
+  const handleAssignDealer = async (leadId: string, dealerId: string) => {
+    const lead = leads.find(l => l.id === leadId);
+    const oldDealerId = lead?.assignedDealerId;
+    
+    // Update Lead UI
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, assignedDealerId: dealerId, assignmentType: 'Direct' } : l));
+    
+    // Update DB
+    await updateLead(leadId, { assignedDealerId: dealerId, assignmentType: 'Direct' });
+
+    // Update Dealer Counts
+    // Decrement old
+    if (oldDealerId) {
+       const oldD = dealers.find(d => d.id === oldDealerId);
+       if (oldD) handleUpdateDealership({ ...oldD, leadsAssigned: Math.max(0, (oldD.leadsAssigned || 0) - 1) });
+    }
+    // Increment new
+    const newD = dealers.find(d => d.id === dealerId);
+    if (newD) handleUpdateDealership({ ...newD, leadsAssigned: (newD.leadsAssigned || 0) + 1 });
+  };
+
+  const handleScheduleFollowUp = async (id: string, date: string) => {
+     setLeads(prev => prev.map(l => l.id === id ? { ...l, followUpDate: date } : l));
+     await updateLead(id, { followUpDate: date });
+  };
+
+  // --- Views ---
+
+  if (loading) {
+     return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
+           <Logo className="w-16 h-16 mb-6" />
+           <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+           <p className="text-slate-400">Connecting to AutoLead Secure Cloud...</p>
+        </div>
+     );
+  }
+
+  if (showOnboarding) {
+     return (
+       <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
+         <Onboarding 
+            onComplete={(d) => {
+               handleSignUp(d);
+               setShowOnboarding(false);
+            }}
+            onCancel={() => setShowOnboarding(false)}
+         />
+       </Suspense>
+     );
+  }
+
+  if (!currentUser) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
+        <Login 
+          dealers={dealers} 
+          onLogin={(user) => setCurrentUser(user)} 
+          onSignUpClick={() => setShowOnboarding(true)}
+        />
+      </Suspense>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-slate-950 overflow-hidden text-slate-200 font-sans">
+      <Sidebar 
+        currentView={currentView} 
+        setView={setView} 
+        isOpen={isMobileMenuOpen} 
+        onClose={() => setIsMobileMenuOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
+
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Mobile Header */}
+        <div className="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-20">
+          <div className="flex items-center gap-3">
+             <button onClick={() => setIsMobileMenuOpen(true)} className="text-white">
+               <Menu className="w-6 h-6" />
+             </button>
+             <Logo className="w-8 h-8" showText={false} />
+             <span className="font-bold text-white">AutoLead SA</span>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+          <div className="max-w-7xl mx-auto">
+            <Suspense fallback={
+               <div className="flex flex-col items-center justify-center h-64">
+                  <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                  <p className="text-slate-500">Loading Module...</p>
+               </div>
+            }>
+              {currentView === 'DASHBOARD' && (
+                <Dashboard 
+                   leads={leads} 
+                   dealers={dealers} 
+                />
+              )}
+              {currentView === 'LEAD_FINDER' && (
+                <LeadFinder 
+                   onAddLead={handleAddLead} 
+                   leads={leads} 
+                   onUpdateLead={handleUpdateLeadContact} 
+                   dealers={dealers} 
+                />
+              )}
+              {currentView === 'MY_LEADS' && (
+                <LeadList 
+                   leads={leads} 
+                   dealers={dealers}
+                   updateStatus={handleUpdateLeadStatus}
+                   bulkUpdateStatus={handleBulkUpdateLeadStatus}
+                   updateContact={handleUpdateLeadContact}
+                   assignDealer={handleAssignDealer}
+                   scheduleFollowUp={handleScheduleFollowUp}
+                   onRefresh={loadData}
+                />
+              )}
+              {currentView === 'DEALER_NETWORK' && (
+                <DealerNetwork 
+                   dealers={dealers} 
+                   onAddDealer={registerDealership} 
+                   onUpdateDealer={handleUpdateDealership}
+                   onOpenOnboarding={() => setShowOnboarding(true)}
+                />
+              )}
+              {currentView === 'BILLING' && (
+                <Billing dealers={dealers} leads={leads} />
+              )}
+              {currentView === 'MARKETING' && (
+                <Marketing />
+              )}
+              {currentView === 'POPIA_COMPLIANCE' && (
+                <Compliance />
+              )}
+              {currentView === 'ABOUT' && (
+                <About />
+              )}
+            </Suspense>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default App;

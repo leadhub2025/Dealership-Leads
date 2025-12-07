@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Dealership, Lead } from '../types';
-import { DollarSign, TrendingUp, Building2, AlertCircle, Search, ArrowUpRight, Download, Check, FileText } from 'lucide-react';
+import { DollarSign, TrendingUp, Building2, AlertCircle, Search, ArrowUpRight, Download, Check, FileText, CreditCard } from 'lucide-react';
 import { generateInvoiceCSV, downloadCSV } from '../services/exportService';
 
 interface BillingProps {
@@ -116,6 +116,40 @@ const Billing: React.FC<BillingProps> = ({ dealers, leads }) => {
              ))}
           </div>
           <p className="text-xs text-slate-500 mt-2">Dealers across {new Set(dealers.map(d => d.region)).size} regions.</p>
+        </div>
+      </div>
+
+      {/* Payment Gateway Integration Section */}
+      <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 shadow-xl">
+        <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+          <CreditCard className="w-5 h-5 mr-2 text-blue-400" /> Payment Methods
+        </h3>
+        <p className="text-sm text-slate-400 mb-6">Manage your subscription payment methods and gateways (Stripe / PayFast).</p>
+        
+        <div className="flex flex-col md:flex-row gap-4">
+           {/* Active Card */}
+           <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 flex items-center justify-between group hover:border-blue-500/50 transition-all">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                    {/* Mock Logo for Stripe */}
+                    <span className="text-indigo-600 font-bold text-sm tracking-tighter">Stripe</span>
+                 </div>
+                 <div>
+                    <p className="text-white font-medium text-sm">Visa ending in 4242</p>
+                    <p className="text-slate-500 text-xs">Expires 12/25 • Default</p>
+                 </div>
+              </div>
+              <span className="text-green-400 text-xs font-bold bg-green-500/10 px-2 py-1 rounded flex items-center">
+                 <Check className="w-3 h-3 mr-1" /> Active
+              </span>
+           </div>
+
+           {/* Add New Method */}
+           <button className="flex-1 bg-slate-900/30 border border-slate-700 border-dashed hover:border-blue-500 hover:bg-slate-900 rounded-xl p-4 flex items-center justify-center text-slate-400 hover:text-white transition-all group">
+              <span className="text-sm font-bold flex items-center group-hover:scale-105 transition-transform">
+                 + Add PayFast / Card
+              </span>
+           </button>
         </div>
       </div>
 
