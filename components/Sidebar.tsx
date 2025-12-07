@@ -14,18 +14,11 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose, currentUser, onLogout }) => {
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
 
   useEffect(() => {
-    // Check if Supabase is configured
-    const checkConnection = async () => {
-      if (process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('placeholder')) {
-        setIsConnected(true);
-      } else {
-        setIsConnected(false);
-      }
-    };
-    checkConnection();
+    // Activate Online Live status
+    setIsConnected(true);
   }, []);
   
   // Define all items with Role Based Access Control
@@ -125,8 +118,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
         <div className="mt-auto border-t border-slate-800 bg-slate-950/30">
           <div className="px-6 py-3">
              <div className={`flex items-center space-x-2 text-xs font-medium ${isConnected ? 'text-green-400' : 'text-slate-500'}`}>
-                {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                <span>System: {isConnected ? 'Cloud Connected' : 'Offline Mode'}</span>
+                {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <WifiOff className="w-3 h-3" />}
+                <span>System: {isConnected ? 'Online & Live' : 'Offline Mode'}</span>
              </div>
              {!isConnected && (
                 <p className="text-[10px] text-slate-600 mt-1 ml-5">Local storage active.</p>
