@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Video, FileText, Loader2, Play, Download, Copy, Check, Sparkles, Film, Maximize2, Settings2 } from 'lucide-react';
+import { Video, FileText, Loader2, Play, Download, Copy, Check, Sparkles, Film, Maximize2, Settings2, Share2, Linkedin, Facebook, Twitter, MessageCircle } from 'lucide-react';
 import { generateMarketingVideo, generatePitchScript } from '../services/geminiService';
 
 const TEMPLATES = [
@@ -92,6 +92,55 @@ const Marketing: React.FC = () => {
     navigator.clipboard.writeText(generatedScript);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareToSocial = (platform: string) => {
+    if (!generatedScript) return;
+    const text = generatedScript;
+    let url = '';
+    
+    switch(platform) {
+      case 'twitter':
+        url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text.substring(0, 280))}`; // Twitter limit
+        break;
+      case 'whatsapp':
+        url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        break;
+      case 'linkedin':
+         // LinkedIn doesn't support text pre-fill well on web without API
+         navigator.clipboard.writeText(text);
+         url = 'https://www.linkedin.com/feed/';
+         alert("Script copied to clipboard. Opening LinkedIn...");
+         break;
+      case 'facebook':
+         navigator.clipboard.writeText(text);
+         url = 'https://www.facebook.com/';
+         alert("Script copied to clipboard. Opening Facebook...");
+         break;
+    }
+    if (url) window.open(url, '_blank');
+  };
+  
+  const handleNativeVideoShare = async () => {
+    if (!generatedVideoUrl) return;
+    try {
+      const response = await fetch(generatedVideoUrl);
+      const blob = await response.blob();
+      const file = new File([blob], 'autolead_promo.mp4', { type: 'video/mp4' });
+      
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'AutoLead Generated Video',
+          text: 'Check out this video generated with AutoLead SA.',
+        });
+      } else {
+        alert("Sharing is not supported on this device/browser. Please download the video to share manually.");
+      }
+    } catch (err) {
+      console.error("Share failed:", err);
+      alert("Could not share video automatically. Try downloading it.");
+    }
   };
 
   return (
@@ -246,11 +295,18 @@ const Marketing: React.FC = () => {
                 </div>
 
                 {generatedVideoUrl && (
-                   <div className="p-4 border-t border-slate-800 bg-slate-800/50 flex justify-end">
+                   <div className="p-4 border-t border-slate-800 bg-slate-800/50 flex justify-end gap-3">
+                      <button 
+                         onClick={handleNativeVideoShare}
+                         className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg flex items-center justify-center transition-colors text-sm font-medium"
+                         title="Share"
+                      >
+                         <Share2 className="w-4 h-4 mr-2" /> Share
+                      </button>
                       <a 
                         href={generatedVideoUrl} 
                         download="autolead-marketing.mp4"
-                        className="bg-slate-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center transition-colors text-sm font-medium"
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center justify-center transition-colors text-sm font-bold"
                       >
                         <Download className="w-4 h-4 mr-2" /> Download MP4
                       </a>
@@ -286,12 +342,12 @@ const Marketing: React.FC = () => {
                 </button>
               </div>
 
-              <div className="relative">
-                <div className="absolute top-4 right-4">
+              <div className="relative flex flex-col h-full">
+                <div className="absolute top-4 right-4 z-10">
                   <button 
                     onClick={copyScript}
                     className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 hover:text-white transition-colors"
-                    title="Copy"
+                    title="Copy to Clipboard"
                   >
                     {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -299,9 +355,30 @@ const Marketing: React.FC = () => {
                 <textarea 
                   readOnly
                   value={generatedScript}
-                  className="w-full h-full min-h-[300px] bg-slate-900 border border-slate-800 text-slate-300 rounded-xl p-6 font-mono text-sm leading-relaxed resize-none focus:outline-none"
+                  className="w-full flex-1 min-h-[300px] bg-slate-900 border border-slate-800 text-slate-300 rounded-xl p-6 font-mono text-sm leading-relaxed resize-none focus:outline-none mb-4"
                   placeholder="Your AI-generated script will appear here..."
                 />
+                
+                {/* Social Share Toolbar */}
+                {generatedScript && (
+                   <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Share to Social</span>
+                      <div className="flex gap-2">
+                         <button onClick={() => shareToSocial('twitter')} className="p-2 bg-slate-900 hover:bg-[#1DA1F2]/20 text-slate-400 hover:text-[#1DA1F2] rounded-lg transition-colors border border-slate-700" title="Share to X (Twitter)">
+                            <Twitter className="w-5 h-5" />
+                         </button>
+                         <button onClick={() => shareToSocial('whatsapp')} className="p-2 bg-slate-900 hover:bg-[#25D366]/20 text-slate-400 hover:text-[#25D366] rounded-lg transition-colors border border-slate-700" title="Share to WhatsApp">
+                            <MessageCircle className="w-5 h-5" />
+                         </button>
+                         <button onClick={() => shareToSocial('linkedin')} className="p-2 bg-slate-900 hover:bg-[#0A66C2]/20 text-slate-400 hover:text-[#0A66C2] rounded-lg transition-colors border border-slate-700" title="Copy & Open LinkedIn">
+                            <Linkedin className="w-5 h-5" />
+                         </button>
+                         <button onClick={() => shareToSocial('facebook')} className="p-2 bg-slate-900 hover:bg-[#1877F2]/20 text-slate-400 hover:text-[#1877F2] rounded-lg transition-colors border border-slate-700" title="Copy & Open Facebook">
+                            <Facebook className="w-5 h-5" />
+                         </button>
+                      </div>
+                   </div>
+                )}
               </div>
             </div>
           )}
