@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { MarketInsight } from "../types";
 
@@ -202,7 +203,6 @@ export const searchMarketLeads = async (
       config: {
         tools: [{ googleSearch: {} }],
         // Critical: Disable safety filters to allow processing of public contact info (PII)
-        // Use imported Enums to satisfy type requirements
         safetySettings: [
           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
           { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -230,6 +230,8 @@ export const searchMarketLeads = async (
     // Specifically handle 400 INVALID_ARGUMENT (API Key issues) or general failures
     if (error.message?.includes('400') || error.message?.includes('API key')) {
       console.error("API Key or Validation Error. Falling back to simulation.", error);
+      // Propagate specific error if desired, or fallback.
+      // throw error; // Uncomment to show error in UI, but fallback is safer for demos.
     } else {
       console.error("Lead Search Error (Falling back to simulation):", error);
     }

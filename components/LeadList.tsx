@@ -448,29 +448,66 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                         {isExpanded && (
                            <tr className="bg-slate-900/30">
                               <td colSpan={8} className="p-4 border-t border-slate-700/50">
-                                 <div className="flex gap-4">
-                                    <div className="flex-1 space-y-3">
-                                       <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Intent Summary</h4>
-                                          <p className="text-sm text-slate-300">{lead.intentSummary}</p>
-                                       </div>
-                                       <div className="flex gap-2">
-                                          <button onClick={() => openEditModal(lead)} className="flex items-center text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-2 rounded">
-                                             <Edit2 className="w-3 h-3 mr-2" /> Edit Contact
-                                          </button>
+                                 <div className="flex flex-col md:flex-row gap-6">
+                                    
+                                    {/* Column 1: Intelligence & Source */}
+                                    <div className="flex-1 space-y-4">
+                                       <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center">
+                                             <Sparkles className="w-3 h-3 mr-2 text-blue-400" /> Intent Analysis
+                                          </h4>
+                                          <p className="text-sm text-slate-300 leading-relaxed mb-3">{lead.intentSummary}</p>
+                                          
                                           {lead.groundingUrl && lead.groundingUrl !== '#' && (
-                                             <a href={lead.groundingUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-blue-400 px-3 py-2 rounded">
-                                                <ExternalLink className="w-3 h-3 mr-2" /> View Source
-                                             </a>
+                                             <div className="flex items-center gap-2 pt-3 border-t border-slate-700/50">
+                                                <span className="text-xs text-slate-500">Source:</span>
+                                                <a 
+                                                   href={lead.groundingUrl} 
+                                                   target="_blank" 
+                                                   rel="noreferrer" 
+                                                   className="text-xs text-blue-400 hover:text-blue-300 hover:underline flex items-center"
+                                                >
+                                                   <ExternalLink className="w-3 h-3 mr-1" />
+                                                   {lead.groundingUrl.length > 50 ? lead.groundingUrl.substring(0, 50) + '...' : lead.groundingUrl}
+                                                </a>
+                                             </div>
                                           )}
                                        </div>
+
+                                       <div className="flex gap-2">
+                                          <button onClick={() => openEditModal(lead)} className="flex items-center text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-2 rounded">
+                                             <Edit2 className="w-3 h-3 mr-2" /> Edit Details
+                                          </button>
+                                       </div>
                                     </div>
-                                    <div className="w-64 space-y-2">
-                                       <button onClick={() => openEmailModalHandler(lead, 'outreach')} className="w-full flex items-center justify-center text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded shadow-lg shadow-blue-900/20">
+
+                                    {/* Column 2: Location Map */}
+                                    <div className="w-full md:w-64 h-40 bg-slate-800 rounded-lg border border-slate-700 overflow-hidden relative group">
+                                       <div className="absolute inset-0 bg-slate-900 flex items-center justify-center z-0">
+                                          <MapPin className="w-8 h-8 text-slate-700" />
+                                       </div>
+                                       <iframe
+                                          width="100%"
+                                          height="100%"
+                                          frameBorder="0"
+                                          scrolling="no"
+                                          marginHeight={0}
+                                          marginWidth={0}
+                                          src={`https://maps.google.com/maps?q=${encodeURIComponent(lead.region + ', South Africa')}&t=&z=7&ie=UTF8&iwloc=&output=embed`}
+                                          className="relative z-10 opacity-60 group-hover:opacity-100 transition-opacity"
+                                       ></iframe>
+                                       <div className="absolute bottom-0 left-0 right-0 bg-slate-900/80 text-xs text-center py-1 text-slate-400 z-20 font-medium">
+                                          {lead.region} Region
+                                       </div>
+                                    </div>
+
+                                    {/* Column 3: Actions */}
+                                    <div className="w-full md:w-48 space-y-2">
+                                       <button onClick={() => openEmailModalHandler(lead, 'outreach')} className="w-full flex items-center justify-center text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded shadow-lg shadow-blue-900/20 transition-all">
                                           <Send className="w-3 h-3 mr-2" /> AI Outreach Email
                                        </button>
-                                       <button onClick={() => openReminderModal(lead.id)} className="w-full flex items-center justify-center text-xs bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 rounded border border-slate-600">
-                                          <CalendarClock className="w-3 h-3 mr-2" /> Schedule Follow-up
+                                       <button onClick={() => openReminderModal(lead.id)} className="w-full flex items-center justify-center text-xs bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 rounded border border-slate-600 transition-all">
+                                          <CalendarClock className="w-3 h-3 mr-2" /> Set Reminder
                                        </button>
                                     </div>
                                  </div>
@@ -533,7 +570,25 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                         <div className="flex items-center text-xs text-slate-300">
                            <Building2 className="w-3 h-3 mr-2 text-slate-500" /> {dealers.find(d => d.id === lead.assignedDealerId)?.name || 'Unassigned'}
                         </div>
-                        <button onClick={() => openEditModal(lead)} className="w-full text-xs text-blue-400 mt-2 border border-blue-500/30 rounded py-2">Edit Details</button>
+                        
+                        {/* Mobile Map View */}
+                        <div className="mt-3 rounded-lg overflow-hidden border border-slate-700 h-32 relative">
+                            <iframe
+                                width="100%"
+                                height="100%"
+                                frameBorder="0"
+                                src={`https://maps.google.com/maps?q=${encodeURIComponent(lead.region + ', South Africa')}&t=&z=7&ie=UTF8&iwloc=&output=embed`}
+                                className="opacity-80"
+                            ></iframe>
+                        </div>
+
+                        {lead.groundingUrl && lead.groundingUrl !== '#' && (
+                           <a href={lead.groundingUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full text-xs bg-slate-800 text-blue-400 border border-slate-700 rounded py-2 mt-2">
+                              <ExternalLink className="w-3 h-3 mr-2" /> View Original Source
+                           </a>
+                        )}
+
+                        <button onClick={() => openEditModal(lead)} className="w-full text-xs text-slate-400 mt-2 border border-blue-500/30 rounded py-2">Edit Details</button>
                      </div>
                   )}
                </div>
