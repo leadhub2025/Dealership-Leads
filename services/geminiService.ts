@@ -279,7 +279,7 @@ export const generateFollowUpScript = async (
 
     Goal: Re-engage the customer. Ask if they are still looking for a vehicle or if they would like to book a test drive.
     Tone: Professional, non-intrusive, helpful.
-    Format: Email body text only.
+    Format: Email body text only. Do not include subject line.
   `;
 
   const response = await ai.models.generateContent({
