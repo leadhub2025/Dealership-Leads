@@ -157,7 +157,8 @@ export const fetchLeads = async (): Promise<Lead[]> => {
     // If Supabase returns empty (and we expect data) or fails, fall through
     throw new Error("No data or connection failed");
   } catch (error) {
-    console.warn('Supabase unreachable, using local storage fallback for Leads.');
+    // Info log instead of warning for cleaner console in Demo Mode
+    console.info('Using local storage fallback for Leads (Offline Mode).');
     return getLocalData('leads', MOCK_LEADS);
   }
 };
@@ -194,7 +195,7 @@ export const fetchDealers = async (): Promise<Dealership[]> => {
     if (data && data.length > 0) return data as Dealership[];
     throw new Error("No data");
   } catch (error) {
-    console.warn('Supabase unreachable, using local storage fallback for Dealers.');
+    console.info('Using local storage fallback for Dealers (Offline Mode).');
     return getLocalData('dealers', MOCK_DEALERS);
   }
 };

@@ -202,6 +202,7 @@ export const searchMarketLeads = async (
       config: {
         tools: [{ googleSearch: {} }],
         // Critical: Disable safety filters to allow processing of public contact info (PII)
+        // Use imported Enums to satisfy type requirements
         safetySettings: [
           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
           { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },

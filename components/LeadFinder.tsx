@@ -50,8 +50,8 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
   const [scanLog, setScanLog] = useState<string[]>([]);
   
   // Refs for Intervals
-  const autoPilotIntervalRef = useRef<any>(null);
-  const countdownIntervalRef = useRef<any>(null);
+  const autoPilotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
 
   // Filter Brands by Tier
@@ -530,7 +530,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
            </div>
         )}
 
-        {results && results.map((item, idx) => {
+        {Array.isArray(results) && results.map((item, idx) => {
            // Skip rendering invalid items
            if (!item) return null;
            
