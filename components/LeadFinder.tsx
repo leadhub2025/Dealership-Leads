@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, ExternalLink, Plus, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, AlertTriangle, X, MessageCircle, BarChart, Zap, Clock, History, Play, Pause } from 'lucide-react';
 import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS } from '../constants';
@@ -189,9 +188,10 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
       } else {
         setResults([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Search failed", err);
-      setError("Failed to retrieve market data. Please try again.");
+      // Show actual error message if available, otherwise generic
+      setError(err?.message || "Failed to retrieve market data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -536,7 +536,6 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
            
            // Defensive check for sources to prevent crash
            const sourceUri = item.sources?.[0]?.uri || '#';
-           const displaySource = item.sources?.[0]?.title || item.sourcePlatform || 'Web';
            
            let potentialScore = 0;
            try {
@@ -734,4 +733,3 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
     </div>
   );
 }
-    

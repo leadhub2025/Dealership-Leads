@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { MarketInsight } from "../types";
 
@@ -65,25 +64,26 @@ const extractValue = (text: string, key: string): string => {
  * or when the API key lacks search permissions.
  */
 const generateSimulatedLeads = async (brand: string, model: string, region: string, type: string): Promise<MarketInsight[]> => {
-  const ai = getAiClient();
-  const prompt = `
-    Act as a lead generation engine. 
-    The live search tool is currently unavailable.
-    
-    Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model} in ${region}, South Africa.
-    These should look exactly like real search results from Facebook Marketplace or Gumtree.
-    
-    One should be "HOT" sentiment (Ready to buy/sell).
-    One should be "Warm".
-    
-    OUTPUT FORMATTING:
-    Same strict format as before. Separate with "---LEAD_ITEM---".
-    Keys: Topic, Sentiment, Summary, SourceTitle, SourceURI, SourcePlatform, ContextDealer, ContactName, ContactPhone, ContactEmail.
-    
-    Make the data look authentic (e.g. use South African names, realistic prices in ZAR, and typical mileage).
-  `;
-
+  // Move client init inside try/catch to handle missing keys gracefully
   try {
+    const ai = getAiClient();
+    const prompt = `
+      Act as a lead generation engine. 
+      The live search tool is currently unavailable.
+      
+      Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model} in ${region}, South Africa.
+      These should look exactly like real search results from Facebook Marketplace or Gumtree.
+      
+      One should be "HOT" sentiment (Ready to buy/sell).
+      One should be "Warm".
+      
+      OUTPUT FORMATTING:
+      Same strict format as before. Separate with "---LEAD_ITEM---".
+      Keys: Topic, Sentiment, Summary, SourceTitle, SourceURI, SourcePlatform, ContextDealer, ContactName, ContactPhone, ContactEmail.
+      
+      Make the data look authentic (e.g. use South African names, realistic prices in ZAR, and typical mileage).
+    `;
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -91,7 +91,35 @@ const generateSimulatedLeads = async (brand: string, model: string, region: stri
     return parseLeadsFromText(response.text || "");
   } catch (e) {
     console.error("Simulation failed", e);
-    return [];
+    // ABSOLUTE FALLBACK: Return static data if even AI simulation fails (e.g. Invalid/No API Key)
+    // This ensures the UI never crashes or shows a blank screen.
+    return [
+      {
+        topic: `2022 ${brand} ${model} - System Demo`,
+        sentiment: "HOT",
+        summary: `This is a demo result generated because the AI service is currently unreachable.`,
+        sources: [{ title: "System Fallback", uri: "#" }],
+        sourcePlatform: "System",
+        contextDealer: "Private Seller",
+        extractedContact: {
+          name: "Sipho Nkosi",
+          phone: "082 555 1234",
+          email: "sipho@example.com"
+        }
+      },
+      {
+        topic: `2020 ${brand} ${model} - System Demo`,
+        sentiment: "Warm",
+        summary: `Demo listing. 45,000km, full service history. Contact for details.`,
+        sources: [{ title: "System Fallback", uri: "#" }],
+        sourcePlatform: "System",
+        contextDealer: "Private Seller",
+        extractedContact: {
+          name: "Johan Botha",
+          phone: "083 555 9876"
+        }
+      }
+    ];
   }
 };
 

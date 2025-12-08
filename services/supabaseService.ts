@@ -101,6 +101,22 @@ const MOCK_LEADS: Lead[] = [
     contactPhone: '082 555 1234',
     assignedDealerId: 'd3',
     assignmentType: 'Direct'
+  },
+  {
+    id: 'l4',
+    brand: 'Kia',
+    model: 'Sportage',
+    source: 'Online Inquiry',
+    intentSummary: 'Looking for a family SUV with good fuel economy',
+    dateDetected: new Date().toISOString().split('T')[0],
+    status: LeadStatus.NEW,
+    sentiment: 'Warm',
+    region: 'Western Cape',
+    groundingUrl: '#',
+    contactName: 'Aisha Khan',
+    contactEmail: 'aisha.k@example.com',
+    contactPhone: '081 555 9876',
+    assignmentType: 'Direct'
   }
 ];
 
