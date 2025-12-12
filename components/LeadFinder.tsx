@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, ExternalLink, Plus, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, AlertTriangle, X, MessageCircle, BarChart, Zap, Clock, History, Play, Pause } from 'lucide-react';
+import { Search, Loader2, ExternalLink, Plus, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, AlertTriangle, X, MessageCircle, BarChart, Zap, Clock, History, Play, Pause, FileText } from 'lucide-react';
 import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS } from '../constants';
 import { searchMarketLeads, generateOutreachScript } from '../services/geminiService';
 import { MarketInsight, Lead, LeadStatus, Dealership } from '../types';
@@ -38,7 +38,20 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
   const [scriptCopied, setScriptCopied] = useState(false);
 
   // Verification / Overwrite State
-  const [verifyModal, setVerifyModal] = useState<{ open: boolean; item: MarketInsight; formData: { name: string; phone: string; email: string } } | null>(null);
+  const [verifyModal, setVerifyModal] = useState<{ 
+    open: boolean; 
+    item: MarketInsight; 
+    formData: { 
+      name: string; 
+      phone: string; 
+      email: string;
+      brand: string;
+      model: string;
+      region: string;
+      notes: string;
+    } 
+  } | null>(null);
+  
   const [confirmOverwrite, setConfirmOverwrite] = useState<{ open: boolean; leadId: string; newData: { name?: string; phone?: string; email?: string } } | null>(null);
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
   
@@ -232,13 +245,20 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
       return;
     }
 
+    const currentBrandName = brand === 'Any' ? '' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
+    const currentModel = `${model} ${trim}`.trim();
+
     setVerifyModal({
       open: true,
       item: item,
       formData: {
         name: item.extractedContact?.name || '',
         phone: item.extractedContact?.phone || '',
-        email: item.extractedContact?.email || ''
+        email: item.extractedContact?.email || '',
+        brand: currentBrandName,
+        model: currentModel || item.topic, // Fallback to topic if generic search
+        region: region,
+        notes: ''
       }
     });
   };
@@ -248,25 +268,28 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
     if (!popiaConfirmed) return;
 
     const { item, formData } = verifyModal;
-    const brandName = brand === 'Any' ? 'Unknown Brand' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
+    
+    // Use the confirmed form data for Vehicle details instead of search state
+    const brandName = formData.brand || 'Unknown Brand';
     
     const specificSource = item.sourcePlatform || item.sources?.[0]?.title || 'Web Search';
 
     const newLead: Lead = {
       id: Math.random().toString(36).substr(2, 9),
       brand: brandName,
-      model: `${model} ${trim}`.trim(),
+      model: formData.model || 'Unknown Model',
       source: specificSource,
       intentSummary: item.summary || 'No summary available',
       dateDetected: new Date().toISOString(), 
       status: LeadStatus.NEW,
       sentiment: item.sentiment || 'Warm',
-      region: region,
+      region: formData.region,
       groundingUrl: item.sources?.[0]?.uri || '#',
       contactName: formData.name,
       contactPhone: formData.phone,
       contactEmail: formData.email,
-      contextDealer: item.contextDealer
+      contextDealer: item.contextDealer,
+      notes: formData.notes
     };
 
     const assignedDealerId = onAddLead(newLead);
@@ -620,6 +643,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
                     )}
                  </div>
               </div>
+            </div>
            );
         })}
       </div>
@@ -627,115 +651,4 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
       {/* Verify Lead Modal */}
       {verifyModal && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-               <div className="p-5 border-b border-slate-700 flex justify-between items-center">
-                  <h3 className="font-bold text-white text-lg">Verify Lead Details</h3>
-                  <button onClick={() => setVerifyModal(null)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
-               </div>
-               
-               <div className="p-6 space-y-4">
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300">
-                     <p className="font-bold text-white mb-1">{verifyModal.item.topic}</p>
-                     <p>{verifyModal.item.summary}</p>
-                  </div>
-
-                  <div className="space-y-3">
-                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Name</label>
-                        <input 
-                           type="text" 
-                           value={verifyModal.formData.name}
-                           onChange={(e) => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, name: e.target.value}})}
-                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
-                           placeholder="Unknown"
-                        />
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
-                        <input 
-                           type="text" 
-                           value={verifyModal.formData.phone}
-                           onChange={(e) => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, phone: e.target.value}})}
-                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
-                           placeholder="Unknown"
-                        />
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email (Optional)</label>
-                        <input 
-                           type="text" 
-                           value={verifyModal.formData.email}
-                           onChange={(e) => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, email: e.target.value}})}
-                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
-                           placeholder="Unknown"
-                        />
-                     </div>
-                  </div>
-                  
-                  <div className="pt-2">
-                     <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg hover:bg-slate-700/50 border border-transparent hover:border-slate-600 transition-all">
-                        <input 
-                           type="checkbox" 
-                           checked={popiaConfirmed}
-                           onChange={(e) => setPopiaConfirmed(e.target.checked)}
-                           className="mt-1 rounded border-slate-500 bg-slate-800 text-blue-600 focus:ring-offset-slate-900"
-                        />
-                        <div className="text-xs text-slate-400">
-                           <span className="font-bold text-white">I confirm POPIA Compliance</span>
-                           <p>The data being saved was obtained from a public source. I will not spam or harass the contact.</p>
-                        </div>
-                     </label>
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                     <button onClick={() => setVerifyModal(null)} className="flex-1 py-2 text-slate-400 hover:text-white">Cancel</button>
-                     <button 
-                        onClick={confirmAddLead}
-                        disabled={!popiaConfirmed}
-                        className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-2 rounded-lg"
-                     >
-                        Confirm & Save
-                     </button>
-                  </div>
-               </div>
-            </div>
-         </div>
-      )}
-
-      {/* Script Modal */}
-      {scriptModal && (
-         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
-               <div className="p-5 border-b border-slate-700 flex justify-between items-center">
-                  <h3 className="font-bold text-white text-lg">AI Outreach Script</h3>
-                  <button onClick={() => setScriptModal(null)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
-               </div>
-               <div className="p-6">
-                  {scriptModal.loading ? (
-                     <div className="py-8 flex flex-col items-center text-slate-400">
-                        <Loader2 className="w-8 h-8 animate-spin mb-3 text-purple-500" />
-                        <p>Generating personalized message...</p>
-                     </div>
-                  ) : (
-                     <>
-                        <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 mb-4 relative group">
-                           <button 
-                              onClick={copyToClipboard}
-                              className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                              title="Copy to clipboard"
-                           >
-                              {scriptCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                           </button>
-                           <p className="text-slate-300 text-sm whitespace-pre-wrap font-mono leading-relaxed">
-                              {scriptModal.script}
-                           </p>
-                        </div>
-                     </>
-                  )}
-               </div>
-            </div>
-         </div>
-      )}
-    </div>
-  );
-}
+            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-2

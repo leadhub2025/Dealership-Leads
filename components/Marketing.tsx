@@ -19,7 +19,7 @@ const TEMPLATES = [
   {
     id: 'arrival',
     label: 'New Model Launch',
-    videoPrompt: "Cinematic studio lighting reveal of a sleek modern SUV. Dramatic shadows, rim lighting highlighting the curves. The car is silver metallic. High-end automotive commercial style, 8k resolution.",
+    videoPrompt: "Cinematic studio lighting reveal of a silver SUV. The camera transitions to dynamic shots highlighting safety sensors and performance on a winding road. The video concludes with a welcoming view of a modern dealership entrance with a 'Visit Us' sign. High-end automotive commercial style, 4k.",
     scriptContext: "Write an exciting social media announcement for the launch of the new [Insert Model Name] at our dealership. Highlight key features like safety and performance. Call to action: Visit us for a coffee and a viewing."
   },
   {

@@ -652,32 +652,83 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
       {/* Assign Dealer Modal */}
       {assignmentLeadId && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
-               <h3 className="text-lg font-bold text-white mb-4">Assign Dealership</h3>
-               <input 
-                  type="text" 
-                  placeholder="Filter dealers..." 
-                  value={dealerSearch}
-                  onChange={e => setDealerSearch(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm mb-2"
-               />
-               <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1 mb-4">
-                  {dealers.filter(d => d.name.toLowerCase().includes(dealerSearch.toLowerCase())).map(d => (
-                     <button 
-                        key={d.id}
-                        onClick={() => setSelectedDealerId(d.id)}
-                        className={`w-full text-left p-3 rounded text-sm flex justify-between items-center ${
-                           selectedDealerId === d.id ? 'bg-blue-600/20 border border-blue-500 text-white' : 'hover:bg-slate-700 text-slate-300'
-                        }`}
-                     >
-                        <span>{d.name}</span>
-                        <span className="text-[10px] bg-slate-900 px-1.5 py-0.5 rounded text-slate-400">{d.region}</span>
-                     </button>
-                  ))}
+            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
+               <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-white">Assign Dealership</h3>
+                  <button onClick={() => setAssignmentLeadId(null)} className="text-slate-500 hover:text-white transition-colors">
+                     <X className="w-5 h-5" />
+                  </button>
                </div>
-               <div className="flex gap-2">
-                  <button onClick={() => setAssignmentLeadId(null)} className="flex-1 py-2 text-slate-400 hover:text-white">Cancel</button>
-                  <button onClick={confirmAssignment} disabled={!selectedDealerId} className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded font-bold py-2">Confirm</button>
+               
+               <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input 
+                     type="text" 
+                     placeholder="Search by name, region or brand..." 
+                     value={dealerSearch}
+                     onChange={e => setDealerSearch(e.target.value)}
+                     className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                     autoFocus
+                  />
+               </div>
+
+               <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-1 mb-4 border border-slate-700/50 rounded-lg bg-slate-900/30 p-1">
+                  {dealers.filter(d => 
+                     d.name.toLowerCase().includes(dealerSearch.toLowerCase()) || 
+                     d.region.toLowerCase().includes(dealerSearch.toLowerCase()) ||
+                     d.brand.toLowerCase().includes(dealerSearch.toLowerCase())
+                  ).length === 0 ? (
+                     <div className="p-8 text-center text-slate-500 text-sm">
+                        <Search className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                        <p>No dealers found.</p>
+                     </div>
+                  ) : (
+                     dealers.filter(d => 
+                        d.name.toLowerCase().includes(dealerSearch.toLowerCase()) || 
+                        d.region.toLowerCase().includes(dealerSearch.toLowerCase()) ||
+                        d.brand.toLowerCase().includes(dealerSearch.toLowerCase())
+                     ).map(d => (
+                        <button 
+                           key={d.id}
+                           onClick={() => setSelectedDealerId(d.id)}
+                           className={`w-full text-left p-3 rounded-lg text-sm flex justify-between items-center transition-all group ${
+                              selectedDealerId === d.id 
+                                 ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20' 
+                                 : 'hover:bg-slate-800 text-slate-300'
+                           }`}
+                        >
+                           <div className="flex flex-col">
+                              <span className="font-bold">{d.name}</span>
+                              <span className={`text-xs ${selectedDealerId === d.id ? 'text-blue-200' : 'text-slate-500 group-hover:text-slate-400'}`}>
+                                 {d.brand} • {d.contactPerson}
+                              </span>
+                           </div>
+                           <span className={`text-[10px] px-2 py-0.5 rounded font-medium border ${
+                              selectedDealerId === d.id 
+                                 ? 'bg-blue-500/30 border-blue-400/30 text-white' 
+                                 : 'bg-slate-800 border-slate-700 text-slate-500 group-hover:border-slate-600'
+                           }`}>
+                              {d.region}
+                           </span>
+                        </button>
+                     ))
+                  )}
+               </div>
+               
+               <div className="flex gap-3 pt-2 border-t border-slate-700/50">
+                  <button 
+                     onClick={() => setAssignmentLeadId(null)} 
+                     className="flex-1 py-2.5 text-slate-400 hover:text-white transition-colors text-sm font-medium"
+                  >
+                     Cancel
+                  </button>
+                  <button 
+                     onClick={confirmAssignment} 
+                     disabled={!selectedDealerId} 
+                     className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-bold py-2.5 shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center"
+                  >
+                     Confirm Assignment
+                  </button>
                </div>
             </div>
          </div>

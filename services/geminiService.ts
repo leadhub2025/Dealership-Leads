@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { MarketInsight } from "../types";
 
 const getAiClient = () => {
@@ -89,17 +89,19 @@ const generateSimulatedLeads = async (brand: string, model: string, region: stri
       Act as a lead generation engine. 
       The live search tool is currently unavailable.
       
-      Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model || 'Vehicle'} in ${region}, South Africa.
-      These should look exactly like real search results from Facebook Marketplace or Gumtree.
+      Generate 3 REALISTIC, HYPOTHETICAL "BUYER" leads for a ${type} ${brand} ${model || 'Vehicle'} in ${region}, South Africa.
       
-      One should be "HOT" sentiment (Ready to buy/sell).
-      One should be "Warm".
+      CRITICAL: These must be people LOOKING TO BUY, not selling.
+      Examples: "Looking for a reliable ${brand} ${model}", "Wanted: ${brand} for family", "In market for ${type} car".
+      
+      One should be "HOT" sentiment (Ready to buy/Cash).
+      One should be "Warm" (Researching).
       
       OUTPUT FORMATTING:
       Same strict format as before. Separate with "---LEAD_ITEM---".
       Keys: Topic, Sentiment, Summary, SourceTitle, SourceURI, SourcePlatform, ContextDealer, ContactName, ContactPhone, ContactEmail.
       
-      Make the data look authentic (e.g. use South African names, realistic prices in ZAR, and typical mileage).
+      Make the data look authentic (e.g. use South African names, realistic budgets in ZAR).
     `;
 
     const response = await ai.models.generateContent({
@@ -112,12 +114,12 @@ const generateSimulatedLeads = async (brand: string, model: string, region: stri
     // ABSOLUTE FALLBACK
     return [
       {
-        topic: `2022 ${brand} ${model || 'Vehicle'} - System Demo`,
+        topic: `WANTED: ${brand} ${model || 'Vehicle'}`,
         sentiment: "HOT",
-        summary: `This is a demo result generated because the AI service is currently unreachable.`,
+        summary: `Customer is looking for a ${brand} ${model} urgently. Cash buyer. Generated fallback lead.`,
         sources: [{ title: "System Fallback", uri: "#" }],
         sourcePlatform: "System",
-        contextDealer: "Private Seller",
+        contextDealer: "Direct Inquiry",
         extractedContact: {
           name: "Sipho Nkosi",
           phone: "082 555 1234",
@@ -146,11 +148,11 @@ const performSearchRequest = async (
     ${query}
     
     SEARCH OBJECTIVES:
-    1. Find "FOR SALE" listings by private individuals (Acquisition Leads).
-    2. Find "WANTED" or "LOOKING FOR" posts (Buyer Leads).
-    3. EXCLUDE listings from major aggregator dealerships if possible; focus on private market signals.
+    1. STRICTLY find "BUYER" leads: People LOOKING TO BUY a vehicle.
+    2. Look for phrases like "Looking for...", "Wanted...", "ISO (In Search Of)...", "Advice on buying...", "Anyone selling a...".
+    3. IGNORE "For Sale" listings where the author is selling their own car. We want to find customers for a dealership, not stock to buy.
     4. ${searchContext}
-    5. PRIORITIZE recent listings (past 60 days) AND results containing phone numbers, emails, or direct contact methods (e.g. "Call 082...").
+    5. PRIORITIZE recent posts (past 30 days) and results containing phone numbers or contact details.
     
     OUTPUT FORMATTING:
     You must output the data in a strict, parsed format.
@@ -158,13 +160,13 @@ const performSearchRequest = async (
     Separate each result block with exactly: "---LEAD_ITEM---"
     
     For each item, strictly use these keys:
-    Topic: [Brief Title, e.g. "2023 Ford Ranger Wildtrak - Private Sale"]
-    Sentiment: ["HOT" (Active Buyer/Seller - Urgent/Cash), "Warm" (Researching/Trade-in), "Cold"]
-    Summary: [Key details: Price, Year, Mileage, and Condition]
-    SourceTitle: [Name of the site, e.g. "Facebook Marketplace"]
+    Topic: [Brief Title, e.g. "Buyer seeking ${searchContext || 'Vehicle'} - R200k Budget"]
+    Sentiment: ["HOT" (Active Buyer - Urgent/Cash), "Warm" (Researching/Trade-in), "Cold"]
+    Summary: [Key details: What they want, Budget, Preferences]
+    SourceTitle: [Name of the site, e.g. "Facebook Community"]
     SourceURI: [COPY THE EXACT URL FOUND in the search result. Do not invent a URL.]
     SourcePlatform: [e.g. "Facebook", "Gumtree", "Forum", "Instagram", "Other"]
-    ContextDealer: [Seller Name or "Private Seller"]
+    ContextDealer: [User Name or "Private Buyer"]
     ContactName: [Name if publicly available, else "N/A"]
     ContactPhone: [Phone if publicly available, else "N/A"]
     ContactEmail: [Email if publicly available, else "N/A"]
@@ -176,10 +178,10 @@ const performSearchRequest = async (
     config: {
       tools: [{ googleSearch: {} }],
       safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
       ]
     }
   });
@@ -215,14 +217,17 @@ export const searchMarketLeads = async (
   if (fuel && fuel !== 'Any') attributes.push(fuel);
   if (transmission && transmission !== 'Any') attributes.push(transmission);
   
-  // Define targeted sources - made slightly more broad
-  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za OR site:instagram.com OR site:twitter.com";
+  // Define targeted sources - focused on discussions and requests
+  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:4x4community.co.za OR site:mybroadband.co.za OR site:twitter.com";
   
-  const intentKeywords = `("urgent" OR "private" OR "wanted" OR "looking for" OR "cash" OR "call" OR "whatsapp" OR "082" OR "083" OR "084" OR "072" OR "060" OR "071" OR "073" OR "074")`;
+  // UPDATED KEYWORDS: Focused on BUYING intent, explicitly excluding "for sale" to reduce noise
+  // We use OR logic for positive intent and strict exclusion for sellers
+  const intentKeywords = `("looking for" OR "wanted" OR "wtb" OR "buying" OR "ISO" OR "in search of" OR "advice on" OR "budget" OR "recommend" OR "seeking") -selling -"for sale" -sold`;
   
   let mileageContext = "";
   if (mileage && (mileage.min || mileage.max)) {
-    mileageContext = `Mileage: ${mileage.min || '0'} to ${mileage.max || 'any'}`;
+    // Buyers usually specify max mileage they accept
+    mileageContext = `under ${mileage.max || 'any'} km`;
   }
 
   // Determine Search Context Instruction for the AI based on specificity
@@ -233,21 +238,23 @@ export const searchMarketLeads = async (
      searchContextInstruction = `Ensure results match the specific model: "${model}".`;
   } else if (effectiveBrand) {
      // KEY CHANGE: If no model specified, instruct AI to look for ANY model under that brand
-     searchContextInstruction = `Find ANY popular vehicle models for the brand "${effectiveBrand}". Do not restrict to a specific model.`;
+     searchContextInstruction = `Find BUYERS looking for vehicles from the brand "${effectiveBrand}".`;
   } else {
-     searchContextInstruction = "Find relevant vehicle listings matching the search criteria.";
+     searchContextInstruction = "Find people looking to buy vehicles.";
   }
 
   try {
     // ATTEMPT 1: Targeted Regional Search
-    console.log(`Attempting search for ${coreVehicle} in ${region}...`);
+    console.log(`Attempting BUYER search for ${coreVehicle} in ${region}...`);
+    
+    // Constructed Query: e.g. "Ford Ranger" "looking for" OR "wanted" Gauteng site:facebook.com ...
     const primaryQuery = `${coreVehicle} ${attributes.join(' ')} ${region} ${intentKeywords} ${siteOperators} ${mileageContext}`;
     
     let leads = await performSearchRequest(primaryQuery, searchContextInstruction, true);
 
     // ATTEMPT 2: Fallback to National/Broad Search if 0 results
     if (leads.length === 0) {
-      console.warn(`No leads found for ${region}. widening scope to South Africa...`);
+      console.warn(`No buyer leads found for ${region}. Widening scope to South Africa...`);
       // Remove specific region, replace with generic country scope
       const broadQuery = `${coreVehicle} ${attributes.join(' ')} South Africa ${intentKeywords} ${mileageContext}`;
       
@@ -257,7 +264,7 @@ export const searchMarketLeads = async (
       leads = nationalLeads.map(lead => ({
         ...lead,
         // Append context to summary
-        summary: `[National Search] ${lead.summary}`, 
+        summary: `[National Buyer] ${lead.summary}`, 
         region: "South Africa (National)" // Override region
       }));
     }
@@ -288,7 +295,7 @@ export const generateOutreachScript = async (
   
   const prompt = `
     Write a short, professional, and friendly outreach message to a potential car buyer.
-    Context: We found their post/listing about wanting to buy a vehicle.
+    Context: We found their post/request about wanting to buy a vehicle.
     Lead Summary: "${leadSummary}"
     Source: Found on ${sourcePlatform}.
     Our Dealership Brand: ${brandName}.
