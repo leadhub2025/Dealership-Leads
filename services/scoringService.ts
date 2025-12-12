@@ -14,57 +14,93 @@ const MEDIUM_INTENT_KEYWORDS = [
   'looking for', 'interested', 'specs', 'installment'
 ];
 
+// Source Quality Weights (Higher = Better conversion probability)
+const SOURCE_WEIGHTS: Record<string, number> = {
+  'website': 20, // Direct web inquiry
+  'autotrader': 15,
+  'cars.co.za': 15,
+  'gumtree': 10,
+  'facebook marketplace': 10,
+  'facebook group': 5,
+  'instagram': 5,
+  'twitter': 5,
+  'forum': 8,
+  '4x4community': 10,
+  'web search': 5
+};
+
 /**
  * Calculates a score (0-100) for an existing lead in the CRM.
- * Factors: Sentiment, Contact Completeness, Intent Keywords, Time of Day, Recency, Dealer Proximity.
+ * Factors: Sentiment, Contact Completeness, Source Quality, Recency, Keyword Analysis, Dealer Proximity.
  */
 export const calculateLeadScore = (lead: Lead, dealers: Dealership[] = []): number => {
   let score = 0;
 
   // 1. Sentiment Analysis (Base Score)
-  if (lead.sentiment === 'HOT') score += 35;
-  else if (lead.sentiment === 'Warm') score += 20;
-  else score += 10;
+  if (lead.sentiment === 'HOT') score += 25;
+  else if (lead.sentiment === 'Warm') score += 15;
+  else score += 5;
 
-  // 2. Contact Information Completeness
-  if (lead.contactPhone) score += 25;
-  if (lead.contactEmail) score += 15;
-  
-  // 3. Keyword Analysis (Intent from Summary & Source)
-  const text = (lead.intentSummary + ' ' + lead.source).toLowerCase();
-  if (HIGH_INTENT_KEYWORDS.some(k => text.includes(k))) score += 15;
-  else if (MEDIUM_INTENT_KEYWORDS.some(k => text.includes(k))) score += 5;
-
-  // 4. Time of Day (Business Hours Bonus: 08:00 - 17:00)
-  // Only applies if we have a full timestamp
-  if (lead.dateDetected.includes('T')) {
-    const date = new Date(lead.dateDetected);
-    const hour = date.getHours();
-    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
-    
-    // Bonus for inquiries coming in during active business hours (Mon-Fri, 8am-5pm)
-    if (day >= 1 && day <= 5 && hour >= 8 && hour <= 17) {
-        score += 10;
-    }
+  // 2. Contact Information Completeness (Critical)
+  // Phone numbers are significantly more valuable for immediate conversion
+  if (lead.contactPhone) {
+    score += 30;
+  } else if (lead.contactEmail) {
+    score += 15;
+  }
+  // Bonus if both are present
+  if (lead.contactPhone && lead.contactEmail) {
+    score += 10;
   }
 
-  // 5. Recency (Decay)
+  // 3. Source Quality Analysis
+  let sourceScore = 5; // Default baseline
+  const lowerSource = (lead.source || '').toLowerCase();
+  
+  for (const [key, weight] of Object.entries(SOURCE_WEIGHTS)) {
+    if (lowerSource.includes(key)) {
+      sourceScore = weight;
+      break;
+    }
+  }
+  score += sourceScore;
+  
+  // 4. Keyword Analysis (Intent from Summary)
+  const text = (lead.intentSummary || '').toLowerCase();
+  if (HIGH_INTENT_KEYWORDS.some(k => text.includes(k))) score += 10;
+  else if (MEDIUM_INTENT_KEYWORDS.some(k => text.includes(k))) score += 5;
+
+  // 5. Recency (Decay) - Freshness is key in auto sales
   const leadDate = new Date(lead.dateDetected);
   const now = new Date();
   const diffHours = (now.getTime() - leadDate.getTime()) / (1000 * 60 * 60);
   
-  if (diffHours < 24) score += 15;      // < 24 hours
-  else if (diffHours < 72) score += 10; // < 3 days
+  if (diffHours < 12) score += 20;      // < 12 hours (Hot/Fresh)
+  else if (diffHours < 24) score += 15; // < 24 hours
+  else if (diffHours < 48) score += 10; // < 2 days
   else if (diffHours < 168) score += 5; // < 1 week
+  // Leads older than a week get 0 recency points
 
-  // 6. Proximity / Region Match (If assigned)
+  // 6. Time of Day (Business Hours Bonus: 08:00 - 17:00)
+  // Only applies if we have a full timestamp
+  if (lead.dateDetected.includes('T')) {
+    const hour = leadDate.getHours();
+    const day = leadDate.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    // Bonus for inquiries coming in during active business hours (Mon-Fri)
+    if (day >= 1 && day <= 5 && hour >= 8 && hour <= 17) {
+        score += 5;
+    }
+  }
+
+  // 7. Proximity / Region Match (If assigned)
   if (lead.assignedDealerId) {
       const dealer = dealers.find(d => d.id === lead.assignedDealerId);
       if (dealer) {
           if (dealer.region === lead.region) {
-              score += 20; // Exact Region Match
+              score += 15; // Exact Region Match
           } else if (REGION_ADJACENCY[dealer.region]?.includes(lead.region)) {
-              score += 10; // Neighboring Region
+              score += 5; // Neighboring Region
           }
       }
   }
@@ -80,17 +116,28 @@ export const calculateInsightScore = (insight: MarketInsight, searchRegion: stri
     let score = 0;
     
     // Sentiment
-    if (insight.sentiment === 'HOT') score += 35;
-    else if (insight.sentiment === 'Warm') score += 20;
-    else score += 10;
+    if (insight.sentiment === 'HOT') score += 30;
+    else if (insight.sentiment === 'Warm') score += 15;
+    else score += 5;
 
     // Contact Info (Extracted)
-    if (insight.extractedContact?.phone) score += 25;
+    if (insight.extractedContact?.phone) score += 35;
     if (insight.extractedContact?.email) score += 15;
+
+    // Source Quality
+    const lowerSource = (insight.sourcePlatform || insight.sources?.[0]?.title || '').toLowerCase();
+    let sourceScore = 5;
+    for (const [key, weight] of Object.entries(SOURCE_WEIGHTS)) {
+        if (lowerSource.includes(key)) {
+        sourceScore = weight;
+        break;
+        }
+    }
+    score += sourceScore;
 
     // Keywords
     const text = (insight.summary + ' ' + insight.topic).toLowerCase();
-    if (HIGH_INTENT_KEYWORDS.some(k => text.includes(k))) score += 15;
+    if (HIGH_INTENT_KEYWORDS.some(k => text.includes(k))) score += 10;
     else if (MEDIUM_INTENT_KEYWORDS.some(k => text.includes(k))) score += 5;
 
     // Implicit Region Match (Result found via region-specific search)

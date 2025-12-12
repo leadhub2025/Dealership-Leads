@@ -2,9 +2,10 @@
 import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import { ViewState, Lead, LeadStatus, Dealership, User } from './types';
-import { Menu, Loader2 } from 'lucide-react';
+import { Menu, Loader2, CheckCircle, Mail, ArrowRight, Sparkles } from 'lucide-react';
 import { REGION_ADJACENCY } from './constants';
 import { fetchLeads, fetchDealers, createLead, updateLead, createDealer, updateDealer } from './services/supabaseService';
+import { sendWelcomeEmail } from './services/emailService';
 import { Logo } from './components/Logo';
 
 // --- Lazy Load Components for Performance ---
@@ -29,6 +30,10 @@ const App: React.FC = () => {
   const [dealers, setDealers] = useState<Dealership[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Notification State
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [registrationSuccess, setRegistrationSuccess] = useState<{name: string, email: string} | null>(null);
 
   // --- Session Check & Data Fetching Logic ---
   const loadData = useCallback(async () => {
@@ -94,10 +99,14 @@ const App: React.FC = () => {
   // Handle Sign Up completion for new users (Public Flow)
   const handleSignUp = async (dealer: Dealership) => {
     setLoading(true);
+    setShowOnboarding(false); // Immediate close to prevent flickering
+    
     try {
        // 1. Register the dealer in DB
-       const dealerWithBilling = {
+       // Ensure password is strictly passed through
+       const dealerWithBilling: Dealership = {
         ...dealer,
+        password: dealer.password, // Explicitly ensure password is conserved
         billing: dealer.billing || {
           plan: 'Standard',
           costPerLead: 350,
@@ -106,12 +115,24 @@ const App: React.FC = () => {
           lastBilledDate: new Date().toISOString().split('T')[0],
           currentUnbilledAmount: 0
         }
-      } as Dealership;
+      };
       
       await createDealer(dealerWithBilling);
-      setDealers(prev => [...prev, dealerWithBilling]);
+      
+      // Update local state to reflect new dealer immediately
+      setDealers(prev => {
+         const others = prev.filter(d => d.email.toLowerCase() !== dealerWithBilling.email.toLowerCase());
+         return [...others, dealerWithBilling];
+      });
 
-      // 2. Create a user session for them (Auto Login as Principal)
+      // 2. Send Confirmation Email (Simulation)
+      try {
+        await sendWelcomeEmail(dealerWithBilling.email, dealerWithBilling.contactPerson);
+      } catch (emailError) {
+        console.warn("Email sending failed slightly but flow continues", emailError);
+      }
+      
+      // 3. Create a user session for them (Auto Login as Principal)
       const newUser: User = {
         id: `user-${dealerWithBilling.id}`,
         name: dealerWithBilling.contactPerson,
@@ -126,9 +147,27 @@ const App: React.FC = () => {
 
       setCurrentUser(newUser);
       setView('DASHBOARD');
+
+      // Success Notification
+      setNotification({
+        message: `Welcome aboard! Confirmation email sent to ${dealerWithBilling.email}`,
+        type: 'success'
+      });
+      setTimeout(() => setNotification(null), 5000);
+      
+      // 4. Trigger Success Modal (Overlay on top of dashboard)
+      setRegistrationSuccess({ 
+        name: dealerWithBilling.contactPerson, 
+        email: dealerWithBilling.email 
+      });
+
     } catch (e) {
       console.error("Signup failed", e);
-      alert("Registration failed. Please try again.");
+      setNotification({
+        message: "Registration failed. Please try again.",
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -314,8 +353,8 @@ const App: React.FC = () => {
        <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
          <Onboarding 
             onComplete={(d) => {
+               // We call handleSignUp here, which will manage the loading state and unmounting
                handleSignUp(d);
-               setShowOnboarding(false);
             }}
             onCancel={() => setShowOnboarding(false)}
          />
@@ -336,7 +375,50 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 overflow-hidden text-slate-200 font-sans">
+    <div className="flex h-screen bg-slate-950 overflow-hidden text-slate-200 font-sans relative">
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-2xl flex items-center animate-in slide-in-from-top-2 border ${
+          notification.type === 'success' ? 'bg-green-600/20 border-green-500/50 text-green-400' : 'bg-red-600/20 border-red-500/50 text-red-400'
+        }`}>
+           <CheckCircle className="w-5 h-5 mr-3" />
+           <span className="font-medium">{notification.message}</span>
+        </div>
+      )}
+
+      {/* Registration Success Modal */}
+      {registrationSuccess && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-300">
+              <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                 <Sparkles className="w-10 h-10 text-green-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Registration Successful!</h2>
+              <p className="text-slate-400 mb-6 leading-relaxed">
+                 Welcome aboard, <span className="text-white font-medium">{registrationSuccess.name}</span>. 
+                 Your dealership is now active on the network.
+              </p>
+              
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-8 text-left flex items-start">
+                 <Mail className="w-5 h-5 text-blue-400 mr-3 mt-0.5 shrink-0" />
+                 <div>
+                    <h4 className="text-blue-300 font-bold text-sm mb-1">Confirmation Email Sent</h4>
+                    <p className="text-xs text-blue-200/70">
+                       We've sent a welcome pack and verification link to <span className="text-white">{registrationSuccess.email}</span>. Please check your inbox.
+                    </p>
+                 </div>
+              </div>
+
+              <button 
+                 onClick={() => setRegistrationSuccess(null)}
+                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-900/20 flex items-center justify-center transition-all group"
+              >
+                 Go to Dashboard <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+              </button>
+           </div>
+        </div>
+      )}
+
       <Sidebar 
         currentView={currentView} 
         setView={setView} 

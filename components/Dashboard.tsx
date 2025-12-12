@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { TrendingUp, Users, DollarSign, Activity, Car, Trophy, Percent, CalendarClock, AlertCircle, Clock, Download, MapPin, Filter, Mail, Tag, UserPlus } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { TrendingUp, Users, DollarSign, Activity, Car, Trophy, Percent, CalendarClock, AlertCircle, Clock, Download, MapPin, Filter, Mail, Tag, UserPlus, PieChart as PieIcon } from 'lucide-react';
 import { Lead, LeadStatus, Dealership } from '../types';
 import { downloadCSV, generateDealerPerformanceCSV } from '../services/exportService';
 import { SA_REGIONS } from '../constants';
@@ -10,6 +10,8 @@ interface DashboardProps {
   leads: Lead[];
   dealers: Dealership[];
 }
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'];
 
 const Dashboard: React.FC<DashboardProps> = ({ leads, dealers }) => {
   const [selectedRegion, setSelectedRegion] = useState<string>('All');
@@ -48,6 +50,26 @@ const Dashboard: React.FC<DashboardProps> = ({ leads, dealers }) => {
   const topBrand = leads.length > 0 
     ? leads.sort((a,b) => leads.filter(l => l.brand === b.brand).length - leads.filter(l => l.brand === a.brand).length)[0].brand 
     : "N/A";
+
+  // --- Lead Source Data for Pie Chart ---
+  const sourceCounts = leads.reduce((acc, lead) => {
+    let source = lead.source || 'Other';
+    // Normalize common sources for cleaner chart
+    if (source.toLowerCase().includes('facebook')) source = 'Facebook';
+    else if (source.toLowerCase().includes('autotrader')) source = 'AutoTrader';
+    else if (source.toLowerCase().includes('cars.co.za')) source = 'Cars.co.za';
+    else if (source.toLowerCase().includes('gumtree')) source = 'Gumtree';
+    else if (source.toLowerCase().includes('google')) source = 'Google';
+    else if (source.toLowerCase().includes('web')) source = 'Website';
+    else if (source.toLowerCase().includes('forum') || source.toLowerCase().includes('community')) source = 'Community';
+
+    acc[source] = (acc[source] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const leadSourceData = Object.entries(sourceCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
 
   // --- Filter Dealers for Charts ---
   const chartDealers = selectedRegion === 'All' 
@@ -162,6 +184,20 @@ const Dashboard: React.FC<DashboardProps> = ({ leads, dealers }) => {
                 </span>
              </div>
           </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="bg-slate-800 border border-slate-700 p-2 rounded shadow-xl text-xs">
+          <p className="text-white font-bold">{data.name}</p>
+          <p className="text-blue-300">{data.value} leads</p>
+          <p className="text-slate-500">{(data.percent * 100).toFixed(0)}% of total</p>
         </div>
       );
     }
@@ -361,22 +397,65 @@ const Dashboard: React.FC<DashboardProps> = ({ leads, dealers }) => {
         </div>
       </div>
 
-      {/* Popular Models */}
-      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-sm">
-         <h3 className="text-lg font-bold text-white mb-4">Most Requested Models</h3>
-         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {modelData.map((m, idx) => (
-               <div key={idx} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 flex items-center justify-between">
-                  <div>
-                     <p className="text-white font-medium text-sm">{m.name}</p>
-                     <p className="text-slate-500 text-xs">{m.count} inquiries</p>
-                  </div>
-                  <div className="bg-slate-800 p-2 rounded-full text-blue-400 text-xs font-bold">
-                     #{idx + 1}
-                  </div>
-               </div>
-            ))}
-         </div>
+      {/* Popular Models and Lead Source Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Pie Chart: Lead Sources */}
+        <div className="lg:col-span-1 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-sm flex flex-col">
+           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center">
+             <PieIcon className="w-4 h-4 mr-2" /> Lead Sources
+           </h3>
+           {leadSourceData.length > 0 ? (
+             <div className="h-[250px] w-full flex-1">
+               <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                    <Pie
+                      data={leadSourceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {leadSourceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0)" />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomPieTooltip />} />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36} 
+                      iconType="circle"
+                      formatter={(value) => <span className="text-xs text-slate-400">{value}</span>}
+                    />
+                 </PieChart>
+               </ResponsiveContainer>
+             </div>
+           ) : (
+             <div className="h-[250px] flex flex-col items-center justify-center text-slate-500">
+                <PieIcon className="w-8 h-8 mb-2 opacity-50" />
+                <p>No lead data available.</p>
+             </div>
+           )}
+        </div>
+
+        {/* Popular Models List */}
+        <div className="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-sm">
+           <h3 className="text-lg font-bold text-white mb-4">Most Requested Models</h3>
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {modelData.map((m, idx) => (
+                 <div key={idx} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 flex items-center justify-between">
+                    <div>
+                       <p className="text-white font-medium text-sm">{m.name}</p>
+                       <p className="text-slate-500 text-xs">{m.count} inquiries</p>
+                    </div>
+                    <div className="bg-slate-800 p-2 rounded-full text-blue-400 text-xs font-bold">
+                       #{idx + 1}
+                    </div>
+                 </div>
+              ))}
+           </div>
+        </div>
       </div>
     </div>
   );

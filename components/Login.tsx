@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Lock, Mail, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2 } from 'lucide-react';
 import { User, Dealership } from '../types';
 import { signInDealer } from '../services/supabaseService';
+import { sendPasswordResetEmail } from '../services/emailService';
 import { Logo } from './Logo';
 
 interface LoginProps {
@@ -17,6 +18,13 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Forgot Password State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +43,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
         }
 
         // Determine Role based on specific email patterns or DB flags
-        // In a full production DB, this would be a column on the user/dealer table
         let role: any = 'DEALER_PRINCIPAL';
         
         if (email.toLowerCase().includes('admin') || email.toLowerCase() === 'owner@autoleadsa.co.za') {
@@ -73,6 +80,41 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    
+    setForgotLoading(true);
+    setForgotError('');
+
+    // Check if email exists in our local dealer list (simulating backend check)
+    // In a real app, the API would handle this check securely.
+    const exists = dealers.some(d => d.email.toLowerCase() === forgotEmail.toLowerCase());
+
+    if (!exists) {
+        // Security: Usually we shouldn't reveal if email exists, but for UX in this app we will show a friendly error
+        setForgotError("We couldn't find an account with that email address.");
+        setForgotLoading(false);
+        return;
+    }
+
+    try {
+        await sendPasswordResetEmail(forgotEmail);
+        setForgotSuccess(true);
+    } catch (e) {
+        setForgotError("Failed to send reset email. Please try again.");
+    } finally {
+        setForgotLoading(false);
+    }
+  };
+
+  const closeForgotModal = () => {
+    setShowForgotModal(false);
+    setForgotEmail('');
+    setForgotSuccess(false);
+    setForgotError('');
   };
 
   return (
@@ -133,7 +175,11 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
               />
               <span className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">Keep me signed in</span>
             </label>
-            <button type="button" className="text-sm text-blue-400 hover:text-blue-300 font-medium">
+            <button 
+                type="button" 
+                onClick={() => setShowForgotModal(true)}
+                className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+            >
               Forgot Password?
             </button>
           </div>
@@ -170,6 +216,75 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
       <div className="absolute bottom-4 text-slate-600 text-xs z-10">
          &copy; {new Date().getFullYear()} AutoLead SA. Secure System.
       </div>
+
+      {/* FORGOT PASSWORD MODAL */}
+      {showForgotModal && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
+                <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-xl font-bold text-white">Reset Password</h3>
+                    <button onClick={closeForgotModal} className="text-slate-500 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {!forgotSuccess ? (
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                        <p className="text-slate-400 text-sm">
+                            Enter your registered email address below. We'll send you a secure link to reset your password.
+                        </p>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                            <input 
+                                type="email" 
+                                value={forgotEmail}
+                                onChange={(e) => setForgotEmail(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                placeholder="name@dealership.co.za"
+                                required
+                            />
+                        </div>
+
+                        {forgotError && (
+                            <div className="flex items-center p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                                <ShieldAlert className="w-4 h-4 mr-2" />
+                                {forgotError}
+                            </div>
+                        )}
+
+                        <button 
+                            type="submit" 
+                            disabled={forgotLoading}
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center transition-all"
+                        >
+                            {forgotLoading ? (
+                                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Sending Link...</>
+                            ) : (
+                                "Send Reset Link"
+                            )}
+                        </button>
+                    </form>
+                ) : (
+                    <div className="text-center py-6">
+                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-8 h-8 text-green-500" />
+                        </div>
+                        <h4 className="text-lg font-bold text-white mb-2">Check your Email</h4>
+                        <p className="text-slate-400 text-sm mb-6">
+                            We've sent a password reset link to <span className="text-white font-medium">{forgotEmail}</span>.
+                        </p>
+                        <button 
+                            onClick={closeForgotModal}
+                            className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                        >
+                            Return to Login
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
     </div>
   );
 };

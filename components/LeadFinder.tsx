@@ -47,6 +47,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
 
   // --- AUTO PILOT STATE ---
   const [isAutoPilot, setIsAutoPilot] = useState(false);
+  const [isScanning, setIsScanning] = useState(false); // Visual indicator for active scanning
   const [nextScanTime, setNextScanTime] = useState<Date | null>(null);
   const [scanLog, setScanLog] = useState<string[]>([]);
   
@@ -69,6 +70,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
 
   // --- AUTO PILOT LOGIC ---
   const handleAutoPilotCycle = async () => {
+    setIsScanning(true); // Start visual scanning indicator
     const state = latestStateRef.current;
     
     // Logic: If brand is "Any", pick a random brand from the list to search this cycle
@@ -114,6 +116,8 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
     } catch (e) {
        console.error("AutoPilot Error", e);
        setScanLog(prevLog => [`[${timestamp}] Error during scan.`, ...prevLog].slice(0, 5));
+    } finally {
+       setIsScanning(false); // Stop visual indicator
     }
   };
   
@@ -122,8 +126,8 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
       // Run first scan immediately
       handleAutoPilotCycle();
       
-      // Set 15 minute interval (15 * 60 * 1000 = 900000ms)
-      const intervalDuration = 15 * 60 * 1000; 
+      // Set 10 minute interval (10 * 60 * 1000 = 600000ms)
+      const intervalDuration = 10 * 60 * 1000; 
       setNextScanTime(new Date(Date.now() + intervalDuration));
 
       autoPilotIntervalRef.current = setInterval(() => {
@@ -138,7 +142,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
           const diff = prev.getTime() - Date.now();
           
           if (diff <= 0) {
-             setTimeRemaining("Scanning...");
+             setTimeRemaining("Starting...");
              return prev; 
           }
           
@@ -155,6 +159,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       setNextScanTime(null);
       setTimeRemaining('');
+      setIsScanning(false);
     }
 
     return () => {
@@ -331,7 +336,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
                  <h3 className={`font-bold ${isAutoPilot ? 'text-indigo-300' : 'text-white'}`}>Auto-Pilot Scanner</h3>
                  <p className="text-xs text-slate-400">
                     {isAutoPilot 
-                      ? `Active: Scanning ${region} every 15 mins` 
+                      ? isScanning ? "Scanning market sources now..." : `Active: Scanning ${region} every 10 mins` 
                       : "Automatically find leads in your AOR while you work."}
                  </p>
               </div>
@@ -339,9 +344,9 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
 
            <div className="flex items-center gap-4">
               {isAutoPilot && (
-                 <div className="flex items-center gap-2 text-xs font-mono text-indigo-300 bg-indigo-950 px-3 py-1.5 rounded-lg border border-indigo-500/30">
-                    <Clock className="w-3 h-3" />
-                    <span>Next Scan: {timeRemaining}</span>
+                 <div className={`flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-lg border transition-all ${isScanning ? 'bg-indigo-600 text-white border-indigo-400 shadow-md' : 'bg-indigo-950 text-indigo-300 border-indigo-500/30'}`}>
+                    {isScanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+                    <span>{isScanning ? 'Processing...' : `Next Scan: ${timeRemaining}`}</span>
                  </div>
               )}
               
@@ -413,14 +418,14 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
 
              {/* Model Input */}
              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Model / Keyword</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Model / Keyword <span className="text-[10px] text-slate-600 font-normal">(Optional)</span></label>
                 <input 
                   type="text" 
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   list="brand-models"
                   className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="e.g. Ranger, SUV, Bakkie"
+                  placeholder="Leave empty for all models"
                 />
                 <datalist id="brand-models">
                   {brand !== 'Any' && (BRAND_MODELS[brand] || []).map(m => (
@@ -458,10 +463,10 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
              <button 
                type="submit"
                disabled={loading}
-               className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-6 rounded-lg flex items-center shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all relative overflow-hidden"
+               className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-8 rounded-xl flex items-center shadow-xl shadow-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-105 active:scale-95 relative overflow-hidden"
              >
                {loading && <span className="absolute inset-0 bg-white/20 animate-pulse"></span>}
-               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+               {loading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Search className="w-5 h-5 mr-2" />}
                {loading ? 'Analyzing Market...' : 'Find Leads Now'}
              </button>
           </div>

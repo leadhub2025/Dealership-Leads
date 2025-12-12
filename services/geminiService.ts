@@ -1,17 +1,34 @@
 
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { MarketInsight } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY ? process.env.API_KEY.trim() : "";
+  let apiKey = "";
+  try {
+    // Access process.env.API_KEY directly to allow bundler replacement.
+    // The typeof check prevents immediate ReferenceError in browsers if replacement doesn't happen.
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+       apiKey = process.env.API_KEY;
+    } else {
+       // Fallback: Attempt access without checks if the bundler replaces the whole expression 'process.env.API_KEY'
+       // This assumes the bundler transforms this code. If not, the try/catch saves us.
+       apiKey = process.env.API_KEY || "";
+    }
+  } catch (e) {
+    // Ignore ReferenceError if process is not defined
+  }
+
+  if (apiKey) apiKey = apiKey.trim();
   if (!apiKey) throw new Error("API Key not found. Ensure process.env.API_KEY is set.");
+  
   return new GoogleGenAI({ apiKey });
 };
 
 // Helper function to parse the structured text from Gemini
 const parseLeadsFromText = (text: string): MarketInsight[] => {
   const leads: MarketInsight[] = [];
-  const parts = text.split("---LEAD_ITEM---");
+  // robust split that handles potentially missing newlines around the separator
+  const parts = text.split(/---LEAD_ITEM---/g);
 
   for (const part of parts) {
     if (!part || !part.trim()) continue;
@@ -21,7 +38,7 @@ const parseLeadsFromText = (text: string): MarketInsight[] => {
 
     const topic = extractValue(cleanPart, "Topic");
     // Defensive: If no topic is found, this block is likely invalid/empty
-    if (!topic) continue;
+    if (!topic || topic.length < 3) continue;
 
     const sourceUri = extractValue(cleanPart, "SourceURI") || "#";
     const sourceTitle = extractValue(cleanPart, "SourceTitle") || "Search Result";
@@ -54,8 +71,9 @@ const parseLeadsFromText = (text: string): MarketInsight[] => {
 };
 
 const extractValue = (text: string, key: string): string => {
-  // Robust regex to capture value after Key:, handling case and potential whitespace
-  const regex = new RegExp(`${key}\\s*:\\s*(.*)`, "i");
+  // Robust regex to capture value after Key:, handling case, bolding, and whitespace
+  // Matches "Key:", "**Key**:", "Key :"
+  const regex = new RegExp(`${key}\\s*:?\\s*(.*)`, "i");
   const match = text.match(regex);
   return match ? match[1].trim() : "";
 };
@@ -65,14 +83,13 @@ const extractValue = (text: string, key: string): string => {
  * or when the API key lacks search permissions.
  */
 const generateSimulatedLeads = async (brand: string, model: string, region: string, type: string): Promise<MarketInsight[]> => {
-  // Move client init inside try/catch to handle missing keys gracefully
   try {
     const ai = getAiClient();
     const prompt = `
       Act as a lead generation engine. 
       The live search tool is currently unavailable.
       
-      Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model} in ${region}, South Africa.
+      Generate 3 REALISTIC, HYPOTHETICAL market leads for a ${type} ${brand} ${model || 'Vehicle'} in ${region}, South Africa.
       These should look exactly like real search results from Facebook Marketplace or Gumtree.
       
       One should be "HOT" sentiment (Ready to buy/sell).
@@ -92,11 +109,10 @@ const generateSimulatedLeads = async (brand: string, model: string, region: stri
     return parseLeadsFromText(response.text || "");
   } catch (e) {
     console.error("Simulation failed", e);
-    // ABSOLUTE FALLBACK: Return static data if even AI simulation fails (e.g. Invalid/No API Key)
-    // This ensures the UI never crashes or shows a blank screen.
+    // ABSOLUTE FALLBACK
     return [
       {
-        topic: `2022 ${brand} ${model} - System Demo`,
+        topic: `2022 ${brand} ${model || 'Vehicle'} - System Demo`,
         sentiment: "HOT",
         summary: `This is a demo result generated because the AI service is currently unreachable.`,
         sources: [{ title: "System Fallback", uri: "#" }],
@@ -107,75 +123,34 @@ const generateSimulatedLeads = async (brand: string, model: string, region: stri
           phone: "082 555 1234",
           email: "sipho@example.com"
         }
-      },
-      {
-        topic: `2020 ${brand} ${model} - System Demo`,
-        sentiment: "Warm",
-        summary: `Demo listing. 45,000km, full service history. Contact for details.`,
-        sources: [{ title: "System Fallback", uri: "#" }],
-        sourcePlatform: "System",
-        contextDealer: "Private Seller",
-        extractedContact: {
-          name: "Johan Botha",
-          phone: "083 555 9876"
-        }
       }
     ];
   }
 };
 
-export const searchMarketLeads = async (
-  brand: string,
-  model: string,
-  trim: string,
-  region: string,
-  type: 'New' | 'Used' | 'Demo',
-  fuel?: string,
-  transmission?: string,
-  mileage?: { min: string; max: string }
+/**
+ * Internal helper to perform the actual search request
+ */
+const performSearchRequest = async (
+  query: string,
+  searchContext: string,
+  requireContactInfo: boolean
 ): Promise<MarketInsight[]> => {
-  
-  // --- ALGORITHM STEP 1: QUERY CONSTRUCTION ---
-  const effectiveBrand = brand === 'Any' ? '' : brand;
-  let coreVehicle = `${effectiveBrand} ${model}`.trim();
-  if (trim) coreVehicle += ` ${trim}`;
-  
-  const attributes = [];
-  if (type) attributes.push(type);
-  if (fuel && fuel !== 'Any') attributes.push(fuel);
-  if (transmission && transmission !== 'Any') attributes.push(transmission);
-  
-  // Define targeted sources and intent keywords
-  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za OR site:instagram.com OR site:twitter.com OR site:linkedin.com";
-  const intentKeywords = "(private seller OR owner OR urgent sale OR wanted OR looking for OR cash ready)";
-  
-  // The Master Query String - Added "past month" to encourage freshness
-  const constructedQuery = `"${coreVehicle}" ${attributes.join(' ')} ${region} ${intentKeywords} ${siteOperators} after:${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`;
-
-  let mileageContext = "";
-  if (mileage && (mileage.min || mileage.max)) {
-    mileageContext = `Mileage preference: ${mileage.min || '0'}km to ${mileage.max || 'any'}km.`;
-  }
+  const ai = getAiClient();
 
   const prompt = `
     Act as an expert automotive market researcher in South Africa.
     
     TASK:
-    Execute a real-time Google Search using the following optimized query strategy to find active leads:
-    Query: ${constructedQuery}
-    ${mileageContext}
+    Execute a real-time Google Search using this query:
+    ${query}
     
     SEARCH OBJECTIVES:
-    1. Classified Listings (Gumtree, JunkMail, AutoTrader, Cars.co.za)
-    2. Social Media (Facebook Marketplace, Instagram, X/Twitter, Public Groups)
-    3. Forum Discussions (MyBroadband, 4x4Community)
-    
-    CRITICAL INSTRUCTIONS:
-    - Look for "FOR SALE" listings by private individuals (Acquisition Leads).
-    - Look for "WANTED" or "LOOKING FOR" posts (Buyer Leads).
-    - EXCLUDE listings from major aggregator dealerships if possible; focus on private market signals.
-    - ${trim ? `MUST match the specific variant: "${trim}"` : 'Ensure results match the model specs.'}
-    - PRIORITIZE recent listings (past 30 days).
+    1. Find "FOR SALE" listings by private individuals (Acquisition Leads).
+    2. Find "WANTED" or "LOOKING FOR" posts (Buyer Leads).
+    3. EXCLUDE listings from major aggregator dealerships if possible; focus on private market signals.
+    4. ${searchContext}
+    5. PRIORITIZE recent listings (past 60 days) AND results containing phone numbers, emails, or direct contact methods (e.g. "Call 082...").
     
     OUTPUT FORMATTING:
     You must output the data in a strict, parsed format.
@@ -195,47 +170,111 @@ export const searchMarketLeads = async (
     ContactEmail: [Email if publicly available, else "N/A"]
   `;
 
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      tools: [{ googleSearch: {} }],
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+      ]
+    }
+  });
+
+  return parseLeadsFromText(response.text || "");
+};
+
+export const searchMarketLeads = async (
+  brand: string,
+  model: string,
+  trim: string,
+  region: string,
+  type: 'New' | 'Used' | 'Demo',
+  fuel?: string,
+  transmission?: string,
+  mileage?: { min: string; max: string }
+): Promise<MarketInsight[]> => {
+  
+  // --- ALGORITHM: RELAXED QUERY CONSTRUCTION ---
+  const effectiveBrand = brand === 'Any' ? '' : brand;
+  
+  // Removed quotes around vehicle to allow fuzzy matching (e.g. "Ford Ranger" matching "Ranger Ford")
+  let coreVehicle = `${effectiveBrand} ${model}`.trim();
+  if (trim) coreVehicle += ` ${trim}`;
+
+  // If both brand and model are empty/generic, ensure we have a fallback search term
+  if (!coreVehicle) {
+     coreVehicle = `${type} Vehicles`;
+  }
+  
+  const attributes = [];
+  if (type) attributes.push(type);
+  if (fuel && fuel !== 'Any') attributes.push(fuel);
+  if (transmission && transmission !== 'Any') attributes.push(transmission);
+  
+  // Define targeted sources - made slightly more broad
+  const siteOperators = "site:facebook.com OR site:gumtree.co.za OR site:autotrader.co.za OR site:cars.co.za OR site:4x4community.co.za OR site:mybroadband.co.za OR site:instagram.com OR site:twitter.com";
+  
+  const intentKeywords = `("urgent" OR "private" OR "wanted" OR "looking for" OR "cash" OR "call" OR "whatsapp" OR "082" OR "083" OR "084" OR "072" OR "060" OR "071" OR "073" OR "074")`;
+  
+  let mileageContext = "";
+  if (mileage && (mileage.min || mileage.max)) {
+    mileageContext = `Mileage: ${mileage.min || '0'} to ${mileage.max || 'any'}`;
+  }
+
+  // Determine Search Context Instruction for the AI based on specificity
+  let searchContextInstruction = "";
+  if (trim) {
+     searchContextInstruction = `MUST match the specific variant: "${trim}".`;
+  } else if (model) {
+     searchContextInstruction = `Ensure results match the specific model: "${model}".`;
+  } else if (effectiveBrand) {
+     // KEY CHANGE: If no model specified, instruct AI to look for ANY model under that brand
+     searchContextInstruction = `Find ANY popular vehicle models for the brand "${effectiveBrand}". Do not restrict to a specific model.`;
+  } else {
+     searchContextInstruction = "Find relevant vehicle listings matching the search criteria.";
+  }
+
   try {
-    const ai = getAiClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        // Critical: Disable safety filters to allow processing of public contact info (PII)
-        safetySettings: [
-          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-        ]
-      }
-    });
-
-    const text = response.text || "";
+    // ATTEMPT 1: Targeted Regional Search
+    console.log(`Attempting search for ${coreVehicle} in ${region}...`);
+    const primaryQuery = `${coreVehicle} ${attributes.join(' ')} ${region} ${intentKeywords} ${siteOperators} ${mileageContext}`;
     
-    // Debug: Log grounding metadata to verify search hits in console
-    console.log("Grounding Metadata:", response.candidates?.[0]?.groundingMetadata);
+    let leads = await performSearchRequest(primaryQuery, searchContextInstruction, true);
 
-    const leads = parseLeadsFromText(text);
+    // ATTEMPT 2: Fallback to National/Broad Search if 0 results
+    if (leads.length === 0) {
+      console.warn(`No leads found for ${region}. widening scope to South Africa...`);
+      // Remove specific region, replace with generic country scope
+      const broadQuery = `${coreVehicle} ${attributes.join(' ')} South Africa ${intentKeywords} ${mileageContext}`;
+      
+      const nationalLeads = await performSearchRequest(broadQuery, searchContextInstruction, false);
+      
+      // Mark these as National/Imported leads so the user knows they aren't local
+      leads = nationalLeads.map(lead => ({
+        ...lead,
+        // Append context to summary
+        summary: `[National Search] ${lead.summary}`, 
+        region: "South Africa (National)" // Override region
+      }));
+    }
 
     if (leads.length === 0) {
-      console.warn("Live search returned 0 results. Falling back to simulation.");
+      console.warn("Live search returned 0 results even after broadening. Falling back to simulation.");
       return await generateSimulatedLeads(brand, model, region, type);
     }
 
     return leads;
 
   } catch (error: any) {
-    // Specifically handle 400 INVALID_ARGUMENT (API Key issues) or general failures
     if (error.message?.includes('400') || error.message?.includes('API key')) {
-      console.error("API Key or Validation Error. Falling back to simulation.", error);
-      // Propagate specific error if desired, or fallback.
-      // throw error; // Uncomment to show error in UI, but fallback is safer for demos.
+      console.error("API Key or Validation Error.", error);
     } else {
-      console.error("Lead Search Error (Falling back to simulation):", error);
+      console.error("Lead Search Error:", error);
     }
-    // Fallback to simulation ensures the user always gets a demo experience
     return await generateSimulatedLeads(brand, model, region, type);
   }
 };
@@ -326,11 +365,12 @@ export const generateMarketingVideo = async (
   aspectRatio: '16:9' | '9:16'
 ): Promise<string | null> => {
     // IMPORTANT: Veo models require a paid key. 
-    // This function assumes the key provided via process.env.API_KEY is valid 
-    // OR that the calling context has handled key selection via window.aistudio.
+    let apiKey = "";
+    try {
+       apiKey = process.env.API_KEY || "";
+       if (apiKey) apiKey = apiKey.trim();
+    } catch(e) {}
     
-    // We create a fresh client here to ensure we pick up any runtime key changes
-    const apiKey = process.env.API_KEY ? process.env.API_KEY.trim() : "";
     if (!apiKey) throw new Error("API Key required for video generation");
 
     const ai = new GoogleGenAI({ apiKey });

@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Lead, LeadStatus, Dealership } from '../types';
-import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Filter, Edit2, X, Building2, Clock, Power, Search, CheckSquare, RefreshCw, Network, Globe, Download, Save, User, ChevronDown, ChevronUp, ChevronRight, Facebook, Car, MessageCircle, ShoppingBag, Users, Laptop, Calendar, Flame, CornerDownRight, Bell, CalendarClock, Send, Sparkles, Loader2, Check, BarChart, ShieldCheck, MapPin, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Phone, Mail, Trash2, CheckCircle, ExternalLink, Edit2, X, Building2, Clock, Power, Search, RefreshCw, Download, User, ChevronDown, ChevronUp, Facebook, ShoppingBag, Users, Laptop, Globe, Flame, Send, Sparkles, Loader2, ShieldCheck, MapPin, Plus, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react';
 import { NAAMSA_BRANDS, POPIA_DISCLAIMER } from '../constants';
 import { generateCSV, downloadCSV } from '../services/exportService';
 import { generateOutreachScript, generateFollowUpScript } from '../services/geminiService';
@@ -58,17 +58,6 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
   // Compliance Info State
   const [showComplianceInfo, setShowComplianceInfo] = useState(false);
 
-  // Auto-Refresh Interval
-  useEffect(() => {
-    // Refresh leads every 60 seconds
-    const interval = setInterval(() => {
-      handleRefresh();
-    }, 60000);
-
-    // Clear interval on unmount
-    return () => clearInterval(interval);
-  }, []);
-
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -81,6 +70,25 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
       setIsRefreshing(false);
     }
   };
+
+  // Use a ref to keep track of the latest handleRefresh to avoid stale closures in setInterval
+  const refreshRef = useRef(handleRefresh);
+  useEffect(() => {
+    refreshRef.current = handleRefresh;
+  });
+
+  // Auto-Refresh Interval
+  useEffect(() => {
+    // Refresh leads every 60 seconds
+    const interval = setInterval(() => {
+      if (refreshRef.current) {
+        refreshRef.current();
+      }
+    }, 60000);
+
+    // Clear interval on unmount
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleExpand = (id: string) => {
     if (expandedLeadId === id) setExpandedLeadId(null);
@@ -361,7 +369,7 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                   const isExpanded = expandedLeadId === lead.id;
                   return (
                      <React.Fragment key={lead.id}>
-                        <tr className={`hover:bg-slate-700/30 transition-colors ${isExpanded ? 'bg-slate-700/20' : ''}`}>
+                        <tr className={`group hover:bg-slate-700/30 transition-colors ${isExpanded ? 'bg-slate-700/20' : ''}`}>
                            <td className="p-4 align-top">
                               <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleSelectOne(lead.id)} className="rounded border-slate-600 bg-slate-800" />
                            </td>
@@ -390,19 +398,37 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
                               </div>
                            </td>
                            <td className="p-4 align-top">
-                              <div className="text-sm text-white flex items-center">
-                                 <User className="w-3 h-3 mr-1.5 text-slate-500" /> {lead.contactName || 'Unknown'}
+                              <div className="flex justify-between items-start">
+                                 <div className="space-y-1">
+                                    <div className="text-sm text-white flex items-center">
+                                       <User className="w-3 h-3 mr-1.5 text-slate-500" /> {lead.contactName || 'Unknown'}
+                                    </div>
+                                    {lead.contactPhone ? (
+                                       <div className="text-xs text-slate-400 flex items-center">
+                                          <Phone className="w-3 h-3 mr-1.5" /> {lead.contactPhone}
+                                       </div>
+                                    ) : (
+                                       <div className="text-xs text-slate-600 italic">No Phone</div>
+                                    )}
+                                    {lead.contactEmail ? (
+                                       <div className="text-xs text-slate-400 flex items-center truncate max-w-[150px]">
+                                          <Mail className="w-3 h-3 mr-1.5" /> {lead.contactEmail}
+                                       </div>
+                                    ) : (
+                                       <div className="text-xs text-slate-600 italic">No Email</div>
+                                    )}
+                                 </div>
+                                 <button 
+                                    onClick={(e) => {
+                                       e.stopPropagation();
+                                       openEditModal(lead);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-slate-500 hover:text-blue-400 hover:bg-slate-700 rounded-md"
+                                    title="Edit Contact Details"
+                                 >
+                                    <Edit2 className="w-3 h-3" />
+                                 </button>
                               </div>
-                              {lead.contactPhone && (
-                                 <div className="text-xs text-slate-400 mt-1 flex items-center">
-                                    <Phone className="w-3 h-3 mr-1.5" /> {lead.contactPhone}
-                                 </div>
-                              )}
-                              {lead.contactEmail && (
-                                 <div className="text-xs text-slate-400 mt-1 flex items-center truncate max-w-[150px]">
-                                    <Mail className="w-3 h-3 mr-1.5" /> {lead.contactEmail}
-                                 </div>
-                              )}
                            </td>
                            <td className="p-4 align-top">
                               {lead.assignedDealerId ? (
@@ -599,16 +625,25 @@ const LeadList: React.FC<LeadListProps> = ({ leads, dealers, updateStatus, bulkU
       {/* Edit Contact Modal */}
       {editingLeadId && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-           <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-sm p-6 shadow-2xl">
+           <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
               <h3 className="text-lg font-bold text-white mb-4">Edit Contact Details</h3>
               <div className="space-y-3">
-                 <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm" placeholder="Name" />
-                 <input type="text" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm" placeholder="Phone" />
-                 <input type="text" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm" placeholder="Email" />
+                 <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                    <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm" placeholder="Name" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                    <input type="text" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm" placeholder="Phone" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
+                    <input type="text" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm" placeholder="Email" />
+                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                 <button onClick={() => setEditingLeadId(null)} className="flex-1 py-2 text-slate-400 hover:text-white">Cancel</button>
-                 <button onClick={saveContact} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold py-2">Save</button>
+              <div className="flex gap-2 mt-6">
+                 <button onClick={() => setEditingLeadId(null)} className="flex-1 py-2 text-slate-400 hover:text-white transition-colors">Cancel</button>
+                 <button onClick={saveContact} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold py-2 shadow-lg shadow-blue-900/20">Save Changes</button>
               </div>
            </div>
         </div>

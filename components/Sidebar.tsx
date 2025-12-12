@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Search, Users, ShieldCheck, Network, X, CreditCard, Video, LogOut, Wifi, WifiOff, Info } from 'lucide-react';
+import { LayoutDashboard, Search, Users, ShieldCheck, Network, X, CreditCard, Video, LogOut, Wifi, WifiOff, Info, Linkedin, Facebook, Twitter } from 'lucide-react';
 import { ViewState, User, UserRole } from '../types';
 import { Logo } from './Logo';
 
@@ -77,7 +78,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
         } md:translate-x-0`}
       >
         <div className="p-6 flex items-center justify-between border-b border-slate-800">
-          <Logo className="w-8 h-8" showText={true} textSize="md" />
+          <div 
+            onClick={() => handleNavigation('DASHBOARD')} 
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+            title="Go to Dashboard"
+          >
+            <Logo className="w-8 h-8" showText={true} textSize="md" />
+          </div>
           <button 
             onClick={onClose}
             className="md:hidden text-slate-400 hover:text-white"
@@ -124,6 +131,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
 
         {/* System Status Footer */}
         <div className="mt-auto border-t border-slate-800 bg-slate-950/30">
+          {/* Social Links */}
+          <div className="flex items-center justify-center gap-6 py-4 border-b border-slate-800">
+             <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-blue-400 transition-colors" title="Follow AutoLead SA on LinkedIn">
+                <Linkedin className="w-4 h-4" />
+             </a>
+             <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-blue-600 transition-colors" title="Like AutoLead SA on Facebook">
+                <Facebook className="w-4 h-4" />
+             </a>
+             <a href="https://twitter.com/" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-sky-400 transition-colors" title="Follow AutoLead SA on X (Twitter)">
+                <Twitter className="w-4 h-4" />
+             </a>
+          </div>
+
           <div className="px-6 py-3">
              <div className={`flex items-center space-x-2 text-xs font-medium ${isConnected ? 'text-green-400' : 'text-red-500'}`}>
                 {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <WifiOff className="w-3 h-3" />}

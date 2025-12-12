@@ -1,7 +1,6 @@
 
 import { supabase } from '../lib/supabaseClient';
 import { Lead, Dealership, LeadStatus } from '../types';
-import { NAAMSA_BRANDS, SA_REGIONS } from '../constants';
 
 // --- MOCK DATA FOR OFFLINE/DEMO MODE ---
 
@@ -57,6 +56,22 @@ const MOCK_DEALERS: Dealership[] = [
 ];
 
 const MOCK_LEADS: Lead[] = [
+  {
+    id: 'l_manual_added',
+    brand: 'Ford',
+    model: '2022 Ranger Wildtrak',
+    source: 'Facebook Marketplace',
+    intentSummary: '2022 Ford Ranger Wildtrak - Private Sale',
+    dateDetected: new Date().toISOString(),
+    status: LeadStatus.NEW,
+    sentiment: 'HOT',
+    region: 'Gauteng',
+    groundingUrl: 'https://www.facebook.com/marketplace',
+    contactName: 'Private Seller',
+    assignedDealerId: 'd3',
+    assignmentType: 'Direct',
+    contextDealer: 'Private Seller'
+  },
   {
     id: 'l1',
     brand: 'Toyota',
@@ -145,7 +160,9 @@ const setLocalData = (key: string, data: any) => {
 
 export const fetchLeads = async (): Promise<Lead[]> => {
   try {
-    // Try Supabase first
+    // Check if online before trying supabase to avoid timeout lag
+    if (!navigator.onLine) throw new Error("Offline");
+
     const { data, error } = await supabase
       .from('leads')
       .select('*')
@@ -154,11 +171,9 @@ export const fetchLeads = async (): Promise<Lead[]> => {
     if (error) throw error;
     if (data && data.length > 0) return data as Lead[];
     
-    // If Supabase returns empty (and we expect data) or fails, fall through
     throw new Error("No data or connection failed");
   } catch (error) {
     // Info log instead of warning for cleaner console in Demo Mode
-    console.info('Using local storage fallback for Leads (Offline Mode).');
     return getLocalData('leads', MOCK_LEADS);
   }
 };
@@ -168,7 +183,6 @@ export const createLead = async (lead: Lead) => {
     const { error } = await supabase.from('leads').insert([lead]);
     if (error) throw error;
   } catch (error) {
-    // Fallback
     const current = getLocalData('leads', MOCK_LEADS);
     setLocalData('leads', [lead, ...current]);
   }
@@ -179,7 +193,6 @@ export const updateLead = async (id: string, updates: Partial<Lead>) => {
     const { error } = await supabase.from('leads').update(updates).eq('id', id);
     if (error) throw error;
   } catch (error) {
-    // Fallback
     const current = getLocalData<Lead[]>('leads', MOCK_LEADS);
     const updated = current.map(l => l.id === id ? { ...l, ...updates } : l);
     setLocalData('leads', updated);
@@ -190,12 +203,13 @@ export const updateLead = async (id: string, updates: Partial<Lead>) => {
 
 export const fetchDealers = async (): Promise<Dealership[]> => {
   try {
+    if (!navigator.onLine) throw new Error("Offline");
+
     const { data, error } = await supabase.from('dealerships').select('*');
     if (error) throw error;
     if (data && data.length > 0) return data as Dealership[];
     throw new Error("No data");
   } catch (error) {
-    console.info('Using local storage fallback for Dealers (Offline Mode).');
     return getLocalData('dealers', MOCK_DEALERS);
   }
 };
@@ -205,8 +219,15 @@ export const createDealer = async (dealer: Dealership) => {
     const { error } = await supabase.from('dealerships').insert([dealer]);
     if (error) throw error;
   } catch (error) {
-     const current = getLocalData('dealers', MOCK_DEALERS);
-     setLocalData('dealers', [...current, dealer]);
+     // Local Storage Fallback:
+     const current = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
+     
+     // IMPORTANT: Remove any existing dealer with the same email to allow overwriting (re-registration)
+     // This ensures the NEW password is used, not the old one.
+     const filtered = current.filter(d => d.email.toLowerCase() !== dealer.email.toLowerCase());
+     
+     // Add the new dealer to the START of the array so .find() matches it first
+     setLocalData('dealers', [dealer, ...filtered]);
   }
 };
 
@@ -225,6 +246,9 @@ export const updateDealer = async (id: string, updates: Partial<Dealership>) => 
 
 export const signInDealer = async (email: string, password?: string) => {
   try {
+    // Attempt Supabase Login first
+    if (!navigator.onLine) throw new Error("Offline");
+
     const { data, error } = await supabase
       .from('dealerships')
       .select('*')
@@ -233,24 +257,31 @@ export const signInDealer = async (email: string, password?: string) => {
       
     if (error) throw error;
     
-    // Basic password check for Supabase DB row (Production would use supabase.auth)
     if (password && data.password && data.password !== password) {
        return null;
     }
     
     return data as Dealership;
   } catch (error) {
-    // Fallback Auth
-    const dealers = getLocalData('dealers', MOCK_DEALERS);
+    // Fallback Auth (Local Storage)
+    const dealers = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
     const found = dealers.find(d => d.email.toLowerCase() === email.toLowerCase());
     
-    if (found && password) {
-       // If dealer has no password set (old mock data), allow any or default 'password123' check
-       if (found.password && found.password !== password) return null;
-       // If no password exists on record, we allow it (development mode) or check against default
-       if (!found.password && password !== 'password123') return null; 
+    if (found) {
+       // Case 1: User has a specific password set (New Registrations)
+       if (found.password) {
+           if (password && found.password === password) {
+               return found;
+           }
+           return null; // Password mismatch
+       }
+       
+       // Case 2: Mock Data User (Default password)
+       if (!found.password && password === 'password123') {
+           return found;
+       }
     }
     
-    return found || null;
+    return null;
   }
 };
