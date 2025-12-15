@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
-import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2, WifiOff } from 'lucide-react';
 import { User, Dealership } from '../types';
 import { signInDealer } from '../services/supabaseService';
 import { sendPasswordResetEmail } from '../services/emailService';
 import { Logo } from './Logo';
+import { isDemoMode } from '../lib/supabaseClient';
 
 interface LoginProps {
   dealers: Dealership[];
@@ -19,6 +20,14 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Auto-fill for demo mode convenience
+  React.useEffect(() => {
+    if (isDemoMode && dealers.length > 0) {
+        setEmail(dealers[0].email);
+        setPassword('password123');
+    }
+  }, [dealers]);
+
   // Forgot Password State
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -32,7 +41,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
     setError('');
 
     try {
-      // Pass both email and password to the service
       const dealer = await signInDealer(email, password);
       
       if (dealer) {
@@ -42,9 +50,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           return;
         }
 
-        // Determine Role based on specific email patterns or DB flags
         let role: any = 'DEALER_PRINCIPAL';
-        
         if (email.toLowerCase().includes('admin') || email.toLowerCase() === 'owner@autoleadsa.co.za') {
            role = 'ADMIN';
         } else if (email.toLowerCase().includes('manager')) {
@@ -53,7 +59,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
            role = 'SALES_EXECUTIVE';
         }
 
-        // Create User Session
         const user: User = {
           id: `user-${dealer.id}`,
           name: dealer.contactPerson,
@@ -63,7 +68,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           avatar: `https://ui-avatars.com/api/?name=${dealer.contactPerson}&background=0D8ABC&color=fff`
         };
         
-        // Handle "Keep me signed in" logic
         if (keepSignedIn) {
           localStorage.setItem('autolead_session', JSON.stringify(user));
         } else {
@@ -72,7 +76,10 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
 
         onLogin(user);
       } else {
-        setError('Invalid credentials or no dealership found. Please try again.');
+        const msg = isDemoMode 
+          ? 'Invalid credentials. In Demo Mode, use the pre-filled accounts or Register a new one (it will save to browser).'
+          : 'Invalid credentials or no dealership found. Please try again.';
+        setError(msg);
       }
     } catch (err) {
       console.error(err);
@@ -85,16 +92,12 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail) return;
-    
     setForgotLoading(true);
     setForgotError('');
 
-    // Check if email exists in our local dealer list (simulating backend check)
-    // In a real app, the API would handle this check securely.
+    // Check against local list for visual feedback
     const exists = dealers.some(d => d.email.toLowerCase() === forgotEmail.toLowerCase());
-
     if (!exists) {
-        // Security: Usually we shouldn't reveal if email exists, but for UX in this app we will show a friendly error
         setForgotError("We couldn't find an account with that email address.");
         setForgotLoading(false);
         return;
@@ -104,7 +107,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
         await sendPasswordResetEmail(forgotEmail);
         setForgotSuccess(true);
     } catch (e) {
-        setForgotError("Failed to send reset email. Please try again.");
+        setForgotError("Failed to send reset email.");
     } finally {
         setForgotLoading(false);
     }
@@ -119,7 +122,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
          <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-blue-900/20 rounded-full blur-[100px]"></div>
          <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[100px]"></div>
@@ -131,6 +133,16 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
           <p className="text-slate-400 text-center">Sign in to access your intelligent dealer dashboard.</p>
         </div>
+        
+        {isDemoMode && (
+           <div className="mb-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3">
+              <WifiOff className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+              <div className="text-xs text-amber-200">
+                 <p className="font-bold">Offline / Demo Mode Active</p>
+                 <p className="opacity-80">Database not connected. Changes will save to your browser's local storage.</p>
+              </div>
+           </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-4">
@@ -148,9 +160,18 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
                 />
               </div>
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-slate-300">Password</label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowForgotModal(true)}
+                  className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input 
@@ -165,125 +186,85 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <label className="flex items-center space-x-2 cursor-pointer group">
-              <input 
-                type="checkbox" 
-                checked={keepSignedIn}
-                onChange={(e) => setKeepSignedIn(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-950 text-blue-600 focus:ring-offset-slate-900 focus:ring-blue-500 transition-colors"
-              />
-              <span className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">Keep me signed in</span>
-            </label>
-            <button 
-                type="button" 
-                onClick={() => setShowForgotModal(true)}
-                className="text-sm text-blue-400 hover:text-blue-300 font-medium"
-            >
-              Forgot Password?
-            </button>
+          <div className="flex items-center">
+            <input 
+              id="keep-signed-in" 
+              type="checkbox" 
+              checked={keepSignedIn}
+              onChange={(e) => setKeepSignedIn(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+            />
+            <label htmlFor="keep-signed-in" className="ml-2 text-sm text-slate-400">Keep me signed in</label>
           </div>
 
           {error && (
-            <div className="flex items-center p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm animate-in slide-in-from-top-2">
-               <ShieldAlert className="w-4 h-4 mr-2" />
-               {error}
-            </div>
+             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-3 text-red-400 text-sm animate-in slide-in-from-top-1">
+                <ShieldAlert className="w-5 h-5 shrink-0" />
+                <span>{error}</span>
+             </div>
           )}
 
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center group"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-900/30 transition-all flex items-center justify-center group disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {loading ? 'Authenticating...' : (
-               <>Sign In <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" /></>
-            )}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Sign In <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
           </button>
         </form>
-
-        <div className="mt-6 text-center pt-6 border-t border-slate-800">
-          <p className="text-slate-400 text-sm mb-2">New to AutoLead?</p>
-          <button 
-            onClick={onSignUpClick}
-            className="text-blue-400 hover:text-blue-300 font-semibold text-sm hover:underline"
-          >
-            Register your Dealership
-          </button>
+        
+        <div className="mt-8 text-center border-t border-slate-800 pt-6">
+           <p className="text-slate-400 text-sm mb-4">Don't have a dealership account?</p>
+           <button 
+             onClick={onSignUpClick}
+             className="text-blue-400 hover:text-white font-semibold transition-colors text-sm hover:underline"
+           >
+             Register New Dealership
+           </button>
         </div>
       </div>
-      
-      <div className="absolute bottom-4 text-slate-600 text-xs z-10">
-         &copy; {new Date().getFullYear()} AutoLead SA. Secure System.
-      </div>
 
-      {/* FORGOT PASSWORD MODAL */}
+      {/* Forgot Password Modal */}
       {showForgotModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
-                <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-xl font-bold text-white">Reset Password</h3>
-                    <button onClick={closeForgotModal} className="text-slate-500 hover:text-white transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                {!forgotSuccess ? (
-                    <form onSubmit={handleForgotPassword} className="space-y-4">
-                        <p className="text-slate-400 text-sm">
-                            Enter your registered email address below. We'll send you a secure link to reset your password.
-                        </p>
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
-                            <input 
-                                type="email" 
-                                value={forgotEmail}
-                                onChange={(e) => setForgotEmail(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                placeholder="name@dealership.co.za"
-                                required
-                            />
-                        </div>
-
-                        {forgotError && (
-                            <div className="flex items-center p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-                                <ShieldAlert className="w-4 h-4 mr-2" />
-                                {forgotError}
-                            </div>
-                        )}
-
-                        <button 
-                            type="submit" 
-                            disabled={forgotLoading}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center transition-all"
-                        >
-                            {forgotLoading ? (
-                                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Sending Link...</>
-                            ) : (
-                                "Send Reset Link"
-                            )}
-                        </button>
-                    </form>
-                ) : (
-                    <div className="text-center py-6">
-                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle className="w-8 h-8 text-green-500" />
-                        </div>
-                        <h4 className="text-lg font-bold text-white mb-2">Check your Email</h4>
-                        <p className="text-slate-400 text-sm mb-6">
-                            We've sent a password reset link to <span className="text-white font-medium">{forgotEmail}</span>.
-                        </p>
-                        <button 
-                            onClick={closeForgotModal}
-                            className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                        >
-                            Return to Login
-                        </button>
-                    </div>
-                )}
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl animate-in zoom-in-95">
+               <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-white">Reset Password</h3>
+                  <button onClick={closeForgotModal} className="text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
+               </div>
+               
+               {!forgotSuccess ? (
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                     <p className="text-sm text-slate-400">Enter your email address and we'll send you a link to reset your password.</p>
+                     <input 
+                        type="email" 
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        placeholder="name@dealership.co.za"
+                        required
+                     />
+                     {forgotError && <p className="text-xs text-red-400">{forgotError}</p>}
+                     <button 
+                        type="submit" 
+                        disabled={forgotLoading}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center"
+                     >
+                        {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Link'}
+                     </button>
+                  </form>
+               ) : (
+                  <div className="text-center py-4">
+                     <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-6 h-6 text-green-500" />
+                     </div>
+                     <h4 className="text-white font-bold mb-2">Check your email</h4>
+                     <p className="text-sm text-slate-400 mb-4">We've sent a password reset link to <span className="text-white">{forgotEmail}</span>.</p>
+                     <button onClick={closeForgotModal} className="text-blue-400 hover:text-blue-300 text-sm font-bold">Return to Login</button>
+                  </div>
+               )}
             </div>
-        </div>
+         </div>
       )}
     </div>
   );

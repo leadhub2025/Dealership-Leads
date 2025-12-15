@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { TrendingUp, Users, DollarSign, Activity, Car, Trophy, Percent, CalendarClock, AlertCircle, Clock, Download, MapPin, Filter, Mail, Tag, UserPlus, PieChart as PieIcon } from 'lucide-react';
@@ -48,7 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({ leads, dealers }) => {
     .slice(0, 5); // Top 5
 
   const topBrand = leads.length > 0 
-    ? leads.sort((a,b) => leads.filter(l => l.brand === b.brand).length - leads.filter(l => l.brand === a.brand).length)[0].brand 
+    ? [...leads].sort((a,b) => leads.filter(l => l.brand === b.brand).length - leads.filter(l => l.brand === a.brand).length)[0].brand 
     : "N/A";
 
   // --- Lead Source Data for Pie Chart ---
@@ -69,7 +68,7 @@ const Dashboard: React.FC<DashboardProps> = ({ leads, dealers }) => {
 
   const leadSourceData = Object.entries(sourceCounts)
     .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => (b.value as number) - (a.value as number));
 
   // --- Filter Dealers for Charts ---
   const chartDealers = selectedRegion === 'All' 

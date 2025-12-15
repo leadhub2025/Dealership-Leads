@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, ExternalLink, Plus, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, AlertTriangle, X, MessageCircle, BarChart, Zap, Clock, History, Play, Pause, FileText } from 'lucide-react';
+import { Search, Loader2, ExternalLink, Plus, MessageSquare, UserCheck, Copy, Check, Flame, Building2, ChevronDown, ChevronUp, MapPin, AlertTriangle, X, MessageCircle, BarChart, Zap, Clock, History, Play, Pause, FileText, ShieldCheck, RefreshCw } from 'lucide-react';
 import { NAAMSA_BRANDS, SA_REGIONS, BRAND_MODELS, COMMON_TRIMS } from '../constants';
 import { searchMarketLeads, generateOutreachScript } from '../services/geminiService';
 import { MarketInsight, Lead, LeadStatus, Dealership } from '../types';
@@ -88,19 +88,24 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
     
     // Logic: If brand is "Any", pick a random brand from the list to search this cycle
     let searchBrand = state.brand;
+    let displayBrandName = state.brand;
+
     if (state.brand === 'Any' && state.filteredBrands.length > 0) {
       const randomIndex = Math.floor(Math.random() * state.filteredBrands.length);
       searchBrand = state.filteredBrands[randomIndex].id;
+      displayBrandName = state.filteredBrands[randomIndex].name;
+    } else {
+        const b = NAAMSA_BRANDS.find(b => b.id === searchBrand);
+        displayBrandName = b ? b.name : searchBrand;
     }
-    const brandName = NAAMSA_BRANDS.find(b => b.id === searchBrand)?.name || searchBrand;
 
     // Add to log
     const timestamp = new Date().toLocaleTimeString();
-    setScanLog(prev => [`[${timestamp}] Scanning ${brandName} in ${state.region}...`, ...prev].slice(0, 5));
+    setScanLog(prev => [`[${timestamp}] Scanning ${displayBrandName} in ${state.region}...`, ...prev].slice(0, 5));
     
     try {
       const data = await searchMarketLeads(
-        brandName, 
+        displayBrandName, 
         state.model, 
         state.trim, 
         state.region, 
@@ -246,6 +251,13 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
     }
 
     const currentBrandName = brand === 'Any' ? '' : (NAAMSA_BRANDS.find(b => b.id === brand)?.name || brand);
+    // If brand was Any, try to extract from topic
+    let inferredBrand = currentBrandName;
+    if (!inferredBrand && item.topic) {
+        const matchingBrand = NAAMSA_BRANDS.find(b => item.topic.toLowerCase().includes(b.name.toLowerCase()));
+        if (matchingBrand) inferredBrand = matchingBrand.name;
+    }
+
     const currentModel = `${model} ${trim}`.trim();
 
     setVerifyModal({
@@ -255,7 +267,7 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
         name: item.extractedContact?.name || '',
         phone: item.extractedContact?.phone || '',
         email: item.extractedContact?.email || '',
-        brand: currentBrandName,
+        brand: inferredBrand || 'Unknown Brand',
         model: currentModel || item.topic, // Fallback to topic if generic search
         region: region,
         notes: ''
@@ -302,6 +314,16 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
     setAddSuccess(successMsg);
     setVerifyModal(null);
     setTimeout(() => setAddSuccess(null), 3000);
+  };
+
+  const handleOverwrite = () => {
+    if (confirmOverwrite) {
+       const { leadId, newData } = confirmOverwrite;
+       onUpdateLead(leadId, newData.name || '', newData.phone || '', newData.email || '');
+       setAddSuccess("Existing lead updated with new contact info.");
+       setConfirmOverwrite(null);
+       setTimeout(() => setAddSuccess(null), 3000);
+    }
   };
 
   const handleGenerateScript = async (item: MarketInsight) => {
@@ -651,4 +673,189 @@ export default function LeadFinder({ onAddLead, leads, onUpdateLead, dealers }: 
       {/* Verify Lead Modal */}
       {verifyModal && (
          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-2
+            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-white">Verify Lead Details</h3>
+                  <button onClick={() => setVerifyModal(null)} className="text-slate-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-xs text-slate-400 mb-4">
+                     Review the details extracted by AI before adding to your CRM.
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Brand</label>
+                        <input 
+                           type="text"
+                           value={verifyModal.formData.brand}
+                           onChange={e => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, brand: e.target.value}})}
+                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
+                           list="brand-list-verify"
+                        />
+                        <datalist id="brand-list-verify">
+                           {NAAMSA_BRANDS.map(b => <option key={b.id} value={b.name} />)}
+                        </datalist>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Model / Topic</label>
+                        <input 
+                           type="text"
+                           value={verifyModal.formData.model}
+                           onChange={e => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, model: e.target.value}})}
+                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
+                        />
+                    </div>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Name</label>
+                     <input 
+                        type="text"
+                        value={verifyModal.formData.name}
+                        onChange={e => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, name: e.target.value}})}
+                        className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
+                        placeholder="Unknown"
+                     />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone</label>
+                        <input 
+                           type="text"
+                           value={verifyModal.formData.phone}
+                           onChange={e => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, phone: e.target.value}})}
+                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
+                           placeholder="N/A"
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+                        <input 
+                           type="text"
+                           value={verifyModal.formData.email}
+                           onChange={e => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, email: e.target.value}})}
+                           className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm"
+                           placeholder="N/A"
+                        />
+                     </div>
+                  </div>
+                  
+                  <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notes</label>
+                      <textarea 
+                          value={verifyModal.formData.notes}
+                          onChange={e => setVerifyModal({...verifyModal, formData: {...verifyModal.formData, notes: e.target.value}})}
+                          className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 text-sm resize-none h-20"
+                          placeholder="Add any additional context..."
+                      />
+                  </div>
+
+                  <div className="flex items-start gap-2 pt-2 border-t border-slate-700">
+                     <input 
+                        type="checkbox" 
+                        id="popia-confirm" 
+                        checked={popiaConfirmed} 
+                        onChange={e => setPopiaConfirmed(e.target.checked)}
+                        className="mt-1 rounded border-slate-600 bg-slate-900" 
+                     />
+                     <label htmlFor="popia-confirm" className="text-xs text-slate-400 cursor-pointer">
+                        I confirm this data will be processed in accordance with POPIA. The contact info is publicly available or obtained with consent.
+                     </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                     <button onClick={() => setVerifyModal(null)} className="flex-1 py-2 text-slate-400 hover:text-white">Cancel</button>
+                     <button 
+                        onClick={confirmAddLead} 
+                        disabled={!popiaConfirmed}
+                        className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg shadow-lg"
+                     >
+                        Confirm & Add
+                     </button>
+                  </div>
+                </div>
+            </div>
+         </div>
+      )}
+
+      {/* Script Modal */}
+      {scriptModal && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95">
+               <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                  <h3 className="font-bold text-white flex items-center">
+                     <MessageSquare className="w-4 h-4 mr-2 text-blue-400" /> AI Outreach Draft
+                  </h3>
+                  <button onClick={() => setScriptModal(null)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
+               </div>
+               
+               <div className="p-6">
+                  {scriptModal.loading ? (
+                     <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+                        <p className="text-slate-400">Generating personalized script...</p>
+                     </div>
+                  ) : (
+                     <>
+                        <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 mb-4 relative group">
+                           <button 
+                              onClick={copyToClipboard}
+                              className="absolute top-2 right-2 p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
+                              title="Copy"
+                           >
+                              {scriptCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                           </button>
+                           <p className="text-slate-300 whitespace-pre-wrap font-mono text-sm leading-relaxed">{scriptModal.script}</p>
+                        </div>
+                        
+                        <div className="bg-blue-900/20 p-3 rounded-lg border border-blue-500/20 text-xs text-blue-300 flex items-start">
+                           <ShieldCheck className="w-4 h-4 mr-2 mt-0.5 shrink-0" />
+                           <span>Ensure you identify yourself and your dealership clearly. Do not spam.</span>
+                        </div>
+                        
+                        <div className="mt-6 flex justify-end">
+                           <button onClick={() => setScriptModal(null)} className="px-4 py-2 text-slate-400 hover:text-white mr-2">Close</button>
+                           <button onClick={copyToClipboard} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold">
+                              {scriptCopied ? 'Copied!' : 'Copy Script'}
+                           </button>
+                        </div>
+                     </>
+                  )}
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* Overwrite Confirmation Modal */}
+      {confirmOverwrite && (
+         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
+               <div className="flex items-center mb-4 text-amber-400">
+                  <AlertTriangle className="w-6 h-6 mr-2" />
+                  <h3 className="text-lg font-bold">Duplicate Lead Found</h3>
+               </div>
+               <p className="text-slate-300 text-sm mb-4">
+                  This lead source URL is already in your CRM. However, we found new contact information.
+               </p>
+               <div className="bg-slate-900 p-3 rounded mb-4 text-xs space-y-1 border border-slate-700">
+                  {confirmOverwrite.newData.name && <p><span className="text-slate-500">Name:</span> {confirmOverwrite.newData.name}</p>}
+                  {confirmOverwrite.newData.phone && <p><span className="text-slate-500">Phone:</span> {confirmOverwrite.newData.phone}</p>}
+                  {confirmOverwrite.newData.email && <p><span className="text-slate-500">Email:</span> {confirmOverwrite.newData.email}</p>}
+               </div>
+               <p className="text-slate-400 text-xs mb-6">Do you want to update the existing lead with this new data?</p>
+               
+               <div className="flex gap-2">
+                  <button onClick={() => setConfirmOverwrite(null)} className="flex-1 py-2 text-slate-400 hover:text-white border border-slate-600 rounded">Cancel</button>
+                  <button onClick={handleOverwrite} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded">Update Lead</button>
+               </div>
+            </div>
+         </div>
+      )}
+    </div>
+  );
+}

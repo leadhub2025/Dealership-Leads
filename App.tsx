@@ -19,6 +19,7 @@ const Onboarding = React.lazy(() => import('./components/Onboarding'));
 const Marketing = React.lazy(() => import('./components/Marketing'));
 const About = React.lazy(() => import('./components/About'));
 const Login = React.lazy(() => import('./components/Login'));
+const PublicLeadForm = React.lazy(() => import('./components/PublicLeadForm'));
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -26,7 +27,11 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // --- State Management (Now sourced from DB) ---
+  // Public Form Mode
+  const [isPublicMode, setIsPublicMode] = useState(false);
+  const [targetDealerId, setTargetDealerId] = useState<string | null>(null);
+
+  // --- State Management ---
   const [dealers, setDealers] = useState<Dealership[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -37,7 +42,6 @@ const App: React.FC = () => {
 
   // --- Session Check & Data Fetching Logic ---
   const loadData = useCallback(async () => {
-    // We don't set global loading true here to allow background refreshes
     try {
       const [loadedLeads, loadedDealers] = await Promise.all([
         fetchLeads(),
@@ -52,10 +56,18 @@ const App: React.FC = () => {
 
   // Initial Session Check
   useEffect(() => {
+    // Check for Public Capture Mode in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'capture') {
+        setIsPublicMode(true);
+        setTargetDealerId(params.get('dealer'));
+        setLoading(false);
+        return;
+    }
+
     const checkSession = async () => {
       setLoading(true);
       
-      // Check for saved session
       const savedSession = localStorage.getItem('autolead_session');
       if (savedSession) {
         try {
@@ -99,14 +111,12 @@ const App: React.FC = () => {
   // Handle Sign Up completion for new users (Public Flow)
   const handleSignUp = async (dealer: Dealership) => {
     setLoading(true);
-    setShowOnboarding(false); // Immediate close to prevent flickering
+    setShowOnboarding(false);
     
     try {
-       // 1. Register the dealer in DB
-       // Ensure password is strictly passed through
        const dealerWithBilling: Dealership = {
         ...dealer,
-        password: dealer.password, // Explicitly ensure password is conserved
+        password: dealer.password,
         billing: dealer.billing || {
           plan: 'Standard',
           costPerLead: 350,
@@ -119,43 +129,37 @@ const App: React.FC = () => {
       
       await createDealer(dealerWithBilling);
       
-      // Update local state to reflect new dealer immediately
       setDealers(prev => {
          const others = prev.filter(d => d.email.toLowerCase() !== dealerWithBilling.email.toLowerCase());
          return [...others, dealerWithBilling];
       });
 
-      // 2. Send Confirmation Email (Simulation)
       try {
         await sendWelcomeEmail(dealerWithBilling.email, dealerWithBilling.contactPerson);
       } catch (emailError) {
         console.warn("Email sending failed slightly but flow continues", emailError);
       }
       
-      // 3. Create a user session for them (Auto Login as Principal)
       const newUser: User = {
         id: `user-${dealerWithBilling.id}`,
         name: dealerWithBilling.contactPerson,
         email: dealerWithBilling.email,
-        role: 'DEALER_PRINCIPAL', // Default for new signups
+        role: 'DEALER_PRINCIPAL',
         dealerId: dealerWithBilling.id,
         avatar: `https://ui-avatars.com/api/?name=${dealerWithBilling.id}`
       };
       
-      // Auto-save session on signup as well
       localStorage.setItem('autolead_session', JSON.stringify(newUser));
 
       setCurrentUser(newUser);
       setView('DASHBOARD');
 
-      // Success Notification
       setNotification({
         message: `Welcome aboard! Confirmation email sent to ${dealerWithBilling.email}`,
         type: 'success'
       });
       setTimeout(() => setNotification(null), 5000);
       
-      // 4. Trigger Success Modal (Overlay on top of dashboard)
       setRegistrationSuccess({ 
         name: dealerWithBilling.contactPerson, 
         email: dealerWithBilling.email 
@@ -182,7 +186,6 @@ const App: React.FC = () => {
   // --- Lead Distribution Logic ---
   const distributeLead = (lead: Lead): Lead => {
     const dealerRoles = ['DEALER_PRINCIPAL', 'SALES_MANAGER', 'SALES_EXECUTIVE'];
-    // If a Dealer User is adding a lead manually via Lead Finder, assign to themselves automatically
     if (currentUser && dealerRoles.includes(currentUser.role) && currentUser.dealerId) {
        return { ...lead, assignedDealerId: currentUser.dealerId, assignmentType: 'Direct' };
     }
@@ -191,7 +194,6 @@ const App: React.FC = () => {
     const normalizedRegion = lead.region.toLowerCase();
     let assignmentType: 'Direct' | 'Fallback' | 'National' = 'Direct';
 
-    // Helper: Filter dealers who have hit their capacity
     const filterAvailableDealers = (list: Dealership[]) => {
       return list.filter(d => 
         d.status === 'Active' && 
@@ -199,20 +201,16 @@ const App: React.FC = () => {
       );
     };
 
-    // Helper: Prioritization Logic (Enterprise > Pro > Standard, then fewest leads)
     const pickBestDealer = (candidates: Dealership[]) => {
         const available = filterAvailableDealers(candidates);
         if (available.length === 0) return null;
         
         return available.sort((a, b) => {
-          // 1. Priority by Plan Tier (Rule Override)
           const planWeight = { 'Enterprise': 3, 'Pro': 2, 'Standard': 1 };
           const weightA = planWeight[a.billing.plan] || 0;
           const weightB = planWeight[b.billing.plan] || 0;
           
-          if (weightA !== weightB) return weightB - weightA; // Higher weight first
-
-          // 2. Load Balancing (Fewest leads first)
+          if (weightA !== weightB) return weightB - weightA;
           return (a.leadsAssigned || 0) - (b.leadsAssigned || 0);
         })[0];
     };
@@ -228,19 +226,17 @@ const App: React.FC = () => {
     if (!matchedDealer) {
        assignmentType = 'Fallback';
        const neighbors = REGION_ADJACENCY[lead.region] || [];
-       
-       // Iterate neighbors in priority order
        for (const neighbor of neighbors) {
           candidates = dealers.filter(d => 
             d.brand.toLowerCase() === normalizedBrand && 
             d.region.toLowerCase() === neighbor.toLowerCase()
           );
           matchedDealer = pickBestDealer(candidates);
-          if (matchedDealer) break; // Stop at first valid neighbor region
+          if (matchedDealer) break; 
        }
     }
 
-    // 3. Tertiary: National Fallback (Any dealer of same brand)
+    // 3. Tertiary: National Fallback
     if (!matchedDealer) {
        assignmentType = 'National';
        candidates = dealers.filter(d => d.brand.toLowerCase() === normalizedBrand);
@@ -255,20 +251,15 @@ const App: React.FC = () => {
       };
     }
 
-    // No dealer found - keep unassigned
     return lead;
   };
 
   const handleAddLead = (lead: Lead) => {
-    // 1. Run Distribution Logic
     const distributedLead = distributeLead(lead);
 
-    // 2. Optimistic UI Update
     setLeads(prev => [distributedLead, ...prev]);
 
-    // 3. DB Persist
     createLead(distributedLead).then(() => {
-       // 4. Update Dealer Stats if assigned
        if (distributedLead.assignedDealerId) {
           const dealer = dealers.find(d => d.id === distributedLead.assignedDealerId);
           if (dealer) {
@@ -299,7 +290,6 @@ const App: React.FC = () => {
   
   const handleBulkUpdateLeadStatus = async (ids: string[], status: LeadStatus) => {
     setLeads(prev => prev.map(l => ids.includes(l.id) ? { ...l, status } : l));
-    // Supabase naive implementation loop (in prod use 'in' query)
     for (const id of ids) {
        await updateLead(id, { status });
     }
@@ -314,19 +304,13 @@ const App: React.FC = () => {
     const lead = leads.find(l => l.id === leadId);
     const oldDealerId = lead?.assignedDealerId;
     
-    // Update Lead UI
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, assignedDealerId: dealerId, assignmentType: 'Direct' } : l));
-    
-    // Update DB
     await updateLead(leadId, { assignedDealerId: dealerId, assignmentType: 'Direct' });
 
-    // Update Dealer Counts
-    // Decrement old
     if (oldDealerId) {
        const oldD = dealers.find(d => d.id === oldDealerId);
        if (oldD) handleUpdateDealership({ ...oldD, leadsAssigned: Math.max(0, (oldD.leadsAssigned || 0) - 1) });
     }
-    // Increment new
     const newD = dealers.find(d => d.id === dealerId);
     if (newD) handleUpdateDealership({ ...newD, leadsAssigned: (newD.leadsAssigned || 0) + 1 });
   };
@@ -348,14 +332,20 @@ const App: React.FC = () => {
      );
   }
 
+  // PUBLIC FORM MODE
+  if (isPublicMode) {
+      return (
+         <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
+            <PublicLeadForm dealerId={targetDealerId} />
+         </Suspense>
+      );
+  }
+
   if (showOnboarding) {
      return (
        <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
          <Onboarding 
-            onComplete={(d) => {
-               // We call handleSignUp here, which will manage the loading state and unmounting
-               handleSignUp(d);
-            }}
+            onComplete={(d) => handleSignUp(d)}
             onCancel={() => setShowOnboarding(false)}
          />
        </Suspense>

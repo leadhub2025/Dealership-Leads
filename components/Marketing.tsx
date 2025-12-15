@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Video, FileText, Loader2, Play, Download, Copy, Check, Sparkles, Film, Maximize2, Settings2, Share2, Linkedin, Facebook, Twitter, MessageCircle, AlertTriangle } from 'lucide-react';
+import { Video, FileText, Loader2, Play, Download, Copy, Check, Sparkles, Film, Maximize2, Settings2, Share2, Linkedin, Facebook, Twitter, MessageCircle, AlertTriangle, Link, Filter } from 'lucide-react';
 import { generateMarketingVideo, generatePitchScript } from '../services/geminiService';
+import { NAAMSA_BRANDS } from '../constants';
 
 const TEMPLATES = [
   {
@@ -37,7 +38,7 @@ const TEMPLATES = [
 ];
 
 const Marketing: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'video' | 'script'>('video');
+  const [activeTab, setActiveTab] = useState<'video' | 'script' | 'capture'>('video');
   
   // Video State
   const [videoPrompt, setVideoPrompt] = useState('');
@@ -52,6 +53,24 @@ const Marketing: React.FC = () => {
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [generatedScript, setGeneratedScript] = useState('');
   const [copied, setCopied] = useState(false);
+  
+  // Capture Link State
+  const [captureLink, setCaptureLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState<string>('All');
+
+  useEffect(() => {
+    // Generate personal link based on current user session (mock ID for now if not available)
+    const dealerId = 'd1'; // Ideally from context
+    const baseUrl = window.location.origin + window.location.pathname;
+    
+    let url = `${baseUrl}?mode=capture&dealer=${dealerId}`;
+    if (selectedBrand !== 'All') {
+        url += `&brand=${encodeURIComponent(selectedBrand)}`;
+    }
+    
+    setCaptureLink(url);
+  }, [selectedBrand]);
 
   const handleApplyTemplate = (templateId: string) => {
     const template = TEMPLATES.find(t => t.id === templateId);
@@ -125,6 +144,12 @@ const Marketing: React.FC = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  
+  const copyLink = () => {
+    navigator.clipboard.writeText(captureLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   const shareToSocial = (platform: string) => {
     if (!generatedScript) return;
@@ -139,7 +164,6 @@ const Marketing: React.FC = () => {
         url = `https://wa.me/?text=${encodeURIComponent(text)}`;
         break;
       case 'linkedin':
-         // LinkedIn doesn't support text pre-fill well on web without API
          navigator.clipboard.writeText(text);
          url = 'https://www.linkedin.com/feed/';
          alert("Script copied to clipboard. Opening LinkedIn...");
@@ -217,6 +241,14 @@ const Marketing: React.FC = () => {
             }`}
           >
             <FileText className="w-4 h-4 mr-2" /> Sales Script Writer
+          </button>
+          <button 
+            onClick={() => setActiveTab('capture')}
+            className={`flex-1 py-4 text-center font-medium flex items-center justify-center transition-colors ${
+              activeTab === 'capture' ? 'bg-blue-600/10 text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+            }`}
+          >
+            <Link className="w-4 h-4 mr-2" /> Lead Capture Link
           </button>
         </div>
 
@@ -422,6 +454,71 @@ const Marketing: React.FC = () => {
             </div>
           )}
 
+          {/* LEAD CAPTURE TAB */}
+          {activeTab === 'capture' && (
+              <div className="flex flex-col items-center justify-center py-12 text-center max-w-2xl mx-auto">
+                  <div className="bg-blue-600/20 p-4 rounded-full mb-6">
+                      <Link className="w-12 h-12 text-blue-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2">Direct Lead Capture Link</h3>
+                  <p className="text-slate-400 mb-8">
+                      Share this unique link on your social media profiles, email signature, or WhatsApp. 
+                      Customers can use it to submit vehicle requests directly to your CRM without going through third parties.
+                  </p>
+                  
+                  {/* Brand Filter for Multi-Brand Dealers */}
+                  <div className="w-full max-w-md mb-6 text-left">
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Campaign Brand Target</label>
+                     <div className="relative">
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <select 
+                           value={selectedBrand}
+                           onChange={(e) => setSelectedBrand(e.target.value)}
+                           className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                           <option value="All">All Brands (General)</option>
+                           {NAAMSA_BRANDS.map(b => (
+                              <option key={b.id} value={b.name}>{b.name}</option>
+                           ))}
+                        </select>
+                     </div>
+                     <p className="text-xs text-slate-500 mt-2">
+                        Select a brand to create a campaign-specific link that pre-fills the inquiry form for the customer.
+                     </p>
+                  </div>
+
+                  <div className="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 flex items-center gap-3 mb-6">
+                      <input 
+                        readOnly 
+                        value={captureLink}
+                        className="flex-1 bg-transparent text-slate-300 text-sm font-mono outline-none"
+                      />
+                      <button 
+                        onClick={copyLink}
+                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+                      >
+                         {linkCopied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
+                      </button>
+                  </div>
+                  
+                  <div className="flex gap-4">
+                      <a 
+                        href={captureLink} 
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-bold transition-colors"
+                      >
+                          Test Link
+                      </a>
+                      <button 
+                        onClick={copyLink}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-colors shadow-lg shadow-blue-900/20"
+                      >
+                          {linkCopied ? 'Link Copied!' : 'Copy Link'}
+                      </button>
+                  </div>
+              </div>
+          )}
         </div>
       </div>
     </div>

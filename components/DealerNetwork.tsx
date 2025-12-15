@@ -69,7 +69,10 @@ const DealerNetwork: React.FC<DealerNetworkProps> = ({ dealers, onAddDealer, onU
 
     const brandName = NAAMSA_BRANDS.find(b => b.id === formData.brand)?.name || formData.brand;
     const cost = formData.plan === 'Enterprise' ? 150 : formData.plan === 'Pro' ? 250 : 350;
-    const capacity = formData.maxCapacity ? parseInt(formData.maxCapacity) : undefined;
+    
+    // Fix for parseInt bug: Ensure we don't pass NaN
+    const capacityInt = formData.maxCapacity ? parseInt(formData.maxCapacity) : 0;
+    const capacity = !isNaN(capacityInt) && capacityInt > 0 ? capacityInt : undefined;
 
     if (editingId) {
       // Update Existing
@@ -135,8 +138,10 @@ const DealerNetwork: React.FC<DealerNetworkProps> = ({ dealers, onAddDealer, onU
   const currentEditingDealer = editingId ? dealers.find(d => d.id === editingId) : null;
   const currentLeads = currentEditingDealer?.leadsAssigned || 0;
   const currentCap = formData.maxCapacity ? parseInt(formData.maxCapacity) : 0;
-  const isCapacityFull = currentCap > 0 && currentLeads >= currentCap;
-  const isCapacityNear = currentCap > 0 && currentLeads >= currentCap * 0.8 && !isCapacityFull;
+  // Ensure we don't divide by zero or NaN for stats
+  const safeCap = !isNaN(currentCap) && currentCap > 0 ? currentCap : 0;
+  const isCapacityFull = safeCap > 0 && currentLeads >= safeCap;
+  const isCapacityNear = safeCap > 0 && currentLeads >= safeCap * 0.8 && !isCapacityFull;
 
   return (
     <div className="space-y-8">
@@ -439,7 +444,7 @@ const DealerNetwork: React.FC<DealerNetworkProps> = ({ dealers, onAddDealer, onU
                         <div>
                             <p className="font-bold">{isCapacityFull ? 'Capacity Reached' : 'Nearing Capacity'}</p>
                             <p>
-                                {currentLeads} / {currentCap} leads assigned. 
+                                {currentLeads} / {safeCap} leads assigned. 
                                 {isCapacityFull ? ' Dealer will not receive distributed leads.' : ''}
                             </p>
                         </div>
