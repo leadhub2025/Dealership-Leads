@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, Search, Users, ShieldCheck, Network, X, CreditCard, Video, LogOut, Wifi, WifiOff, Info } from 'lucide-react';
 import { ViewState, User, UserRole } from '../types';
 import { Logo } from './Logo';
-import { isDemoMode } from '../lib/supabaseClient';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -114,14 +113,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, onClose
         <div className="p-4 border-t border-slate-800 bg-slate-900/50">
            {/* Connection Status */}
            <div className={`flex items-center justify-between px-4 py-3 rounded-lg border mb-4 ${
-              isConnected && !isDemoMode
+              isConnected
                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                 : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                 : 'bg-red-500/10 border-red-500/20 text-red-400'
            }`}>
               <div className="flex items-center">
-                 {isConnected && !isDemoMode ? <Wifi className="w-4 h-4 mr-2" /> : <WifiOff className="w-4 h-4 mr-2" />}
+                 {isConnected ? <Wifi className="w-4 h-4 mr-2" /> : <WifiOff className="w-4 h-4 mr-2" />}
                  <span className="text-xs font-bold">
-                    {isDemoMode ? 'Demo / Offline' : (isConnected ? 'System Online' : 'Connecting...')}
+                    {isConnected ? 'System Online' : 'Connecting...'}
                  </span>
               </div>
            </div>

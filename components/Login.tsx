@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2, WifiOff } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2 } from 'lucide-react';
 import { User, Dealership } from '../types';
 import { signInDealer } from '../services/supabaseService';
 import { sendPasswordResetEmail } from '../services/emailService';
@@ -20,7 +20,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Auto-fill for demo mode convenience
+  // Auto-fill for convenience during testing/review, but quiet about it
   React.useEffect(() => {
     if (isDemoMode && dealers.length > 0) {
         setEmail(dealers[0].email);
@@ -76,10 +76,7 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
 
         onLogin(user);
       } else {
-        const msg = isDemoMode 
-          ? 'Invalid credentials. In Demo Mode, use the pre-filled accounts or Register a new one (it will save to browser).'
-          : 'Invalid credentials or no dealership found. Please try again.';
-        setError(msg);
+        setError('Invalid credentials or no dealership found. Please try again.');
       }
     } catch (err) {
       console.error(err);
@@ -133,16 +130,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
           <p className="text-slate-400 text-center">Sign in to access your intelligent dealer dashboard.</p>
         </div>
-        
-        {isDemoMode && (
-           <div className="mb-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3">
-              <WifiOff className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
-              <div className="text-xs text-amber-200">
-                 <p className="font-bold">Offline / Demo Mode Active</p>
-                 <p className="opacity-80">Database not connected. Changes will save to your browser's local storage.</p>
-              </div>
-           </div>
-        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-4">
