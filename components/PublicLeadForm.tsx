@@ -98,6 +98,7 @@ const PublicLeadForm: React.FC<Props> = ({ dealerId }) => {
                                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">Select Brand</option>
+                                    <option value="Any">Any / All Brands</option>
                                     {NAAMSA_BRANDS.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                                 </select>
                             </div>
