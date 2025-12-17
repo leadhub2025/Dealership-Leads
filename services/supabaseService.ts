@@ -1,252 +1,226 @@
+/**
+ * ============================================
+ * Supabase Service - Business Operations Only
+ * ============================================
+ * Purpose: Handle dealership and lead business operations
+ * Authentication has been moved to authService.ts
+ * ============================================
+ */
 
 import { supabase, isDemoMode } from '../lib/supabaseClient';
-import { Lead, Dealership, LeadStatus } from '../types';
+import { Lead, Dealership } from '../types';
 
-// --- MOCK DATA FOR OFFLINE/DEMO MODE ---
-const MOCK_DEALERS: Dealership[] = [
-  {
-    id: 'd1',
-    name: 'McCarthy Toyota Centurion',
-    brand: 'Toyota',
-    region: 'Gauteng',
-    contactPerson: 'Johan Smit',
-    email: 'johan@mccarthy.co.za',
-    password: 'password123',
-    status: 'Active',
-    leadsAssigned: 124,
-    billing: { plan: 'Enterprise', costPerLead: 150, credits: 5000, totalSpent: 18600, lastBilledDate: '2023-10-01', currentUnbilledAmount: 450 }
-  },
-  {
-    id: 'd2',
-    name: 'Barons VW Woodmead',
-    brand: 'Volkswagen',
-    region: 'Gauteng',
-    contactPerson: 'Sarah Jones',
-    email: 'sarah@barons.co.za',
-    password: 'password123',
-    status: 'Active',
-    leadsAssigned: 89,
-    billing: { plan: 'Pro', costPerLead: 250, credits: 0, totalSpent: 22250, lastBilledDate: '2023-10-01', currentUnbilledAmount: 1250 }
-  }
-];
+// ============================================
+// DEPRECATED AUTHENTICATION FUNCTIONS
+// ============================================
+// NOTE: These functions are deprecated and kept only for backward compatibility
+// Use services/authService.ts for all authentication operations
 
-const MOCK_LEADS: Lead[] = [
-  {
-    id: 'l1',
-    brand: 'Toyota',
-    model: 'Hilux 2.8 GD-6',
-    source: 'Facebook Marketplace',
-    intentSummary: 'Looking for a 2021+ double cab, white, low mileage.',
-    dateDetected: new Date().toISOString().split('T')[0],
-    status: LeadStatus.NEW,
-    sentiment: 'HOT',
-    region: 'Gauteng',
-    groundingUrl: 'https://facebook.com',
-    contactName: 'Piet Pompies',
-    assignedDealerId: 'd1',
-    assignmentType: 'Direct',
-    contextDealer: 'Private Seller'
-  },
-  {
-    id: 'l2',
-    brand: 'Volkswagen',
-    model: 'Polo GTI',
-    source: '4x4 Community Forum',
-    intentSummary: 'Asking about financing options for a new GTI.',
-    dateDetected: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    status: LeadStatus.CONTACTED,
-    sentiment: 'Warm',
-    region: 'Gauteng',
-    groundingUrl: 'https://4x4community.co.za',
-    assignedDealerId: 'd2',
-    assignmentType: 'Direct'
-  }
-];
-
-// --- HELPER: LOCAL STORAGE FALLBACK ---
-
-const getLocalData = <T>(key: string, defaultData: T): T => {
-  try {
-    const saved = localStorage.getItem(`autolead_${key}`);
-    if (saved) return JSON.parse(saved);
-    localStorage.setItem(`autolead_${key}`, JSON.stringify(defaultData));
-    return defaultData;
-  } catch (e) {
-    return defaultData;
-  }
+/**
+ * @deprecated Use authService.registerDealership() instead
+ * This is kept for backward compatibility only
+ */
+export const registerDealer = async (dealer: any): Promise<{ success: boolean; error?: string; dealer?: any }> => {
+  console.warn('⚠️ registerDealer() is deprecated. Please use authService.registerDealership() instead.');
+  return {
+    success: false,
+    error: 'This function is deprecated. Please use authService.registerDealership() instead. See REGISTRATION_EXAMPLE.md for details.'
+  };
 };
 
-const setLocalData = (key: string, data: any) => {
-  try {
-    localStorage.setItem(`autolead_${key}`, JSON.stringify(data));
-  } catch (e) {
-    console.error("Local Storage Error", e);
-  }
+/**
+ * @deprecated Use authService.signIn() instead
+ * This is kept for backward compatibility only
+ */
+export const signInDealer = async (email: string, password: string): Promise<any> => {
+  console.warn('⚠️ signInDealer() is deprecated. Please use authService.signIn() instead.');
+  throw new Error('This function is deprecated. Please use authService.signIn() instead.');
 };
 
-// --- SERVICE METHODS ---
+/**
+ * @deprecated Use authService.checkEmailExists() instead
+ */
+export const checkEmailExists = async (email: string): Promise<boolean> => {
+  console.warn('⚠️ checkEmailExists() is deprecated. Please use authService.checkEmailExists() instead.');
+  throw new Error('This function is deprecated. Please use authService.checkEmailExists() instead.');
+};
 
+// ============================================
+// LEAD MANAGEMENT FUNCTIONS
+// ============================================
+
+/**
+ * Fetch all leads from database
+ */
 export const fetchLeads = async (): Promise<Lead[]> => {
-  // 1. Force Local Mode if Demo/Offline
   if (isDemoMode) {
-    console.log("App in Demo Mode - using local mock data for leads.");
-    return getLocalData('leads', MOCK_LEADS);
+    console.warn('⚠️ Demo mode - database not configured');
+    return [];
   }
 
-  // 2. Attempt Supabase
   try {
     const { data, error } = await supabase
       .from('leads')
       .select('*')
-      .order('dateDetected', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
-    
-    if (data) return data as Lead[];
-    return [];
+    return (data as Lead[]) || [];
   } catch (error) {
-    console.warn("Supabase fetch failed, falling back to local data", error);
-    return getLocalData('leads', MOCK_LEADS);
+    console.error('Fetch leads error:', error);
+    return [];
   }
 };
 
-export const createLead = async (lead: Lead) => {
+/**
+ * Create new lead in database
+ */
+export const createLead = async (lead: Lead): Promise<void> => {
   if (isDemoMode) {
-    const current = getLocalData('leads', MOCK_LEADS);
-    setLocalData('leads', [lead, ...current]);
-    return;
+    console.warn('⚠️ Demo mode - lead creation skipped');
+    throw new Error('Database not configured');
   }
 
   try {
     const { error } = await supabase.from('leads').insert([lead]);
     if (error) throw error;
   } catch (error) {
-    console.error("Create Lead Error", error);
-    const current = getLocalData('leads', MOCK_LEADS);
-    setLocalData('leads', [lead, ...current]);
+    console.error('Create lead error:', error);
+    throw new Error('Failed to create lead');
   }
 };
 
-export const updateLead = async (id: string, updates: Partial<Lead>) => {
+/**
+ * Update existing lead
+ */
+export const updateLead = async (id: string, updates: Partial<Lead>): Promise<void> => {
   if (isDemoMode) {
-    const current = getLocalData<Lead[]>('leads', MOCK_LEADS);
-    const updated = current.map(l => l.id === id ? { ...l, ...updates } : l);
-    setLocalData('leads', updated);
+    console.warn('⚠️ Demo mode - lead update skipped');
     return;
   }
 
   try {
-    const { error } = await supabase.from('leads').update(updates).eq('id', id);
+    const { error } = await supabase
+      .from('leads')
+      .update(updates)
+      .eq('id', id);
+
     if (error) throw error;
   } catch (error) {
-    const current = getLocalData<Lead[]>('leads', MOCK_LEADS);
-    const updated = current.map(l => l.id === id ? { ...l, ...updates } : l);
-    setLocalData('leads', updated);
+    console.error('Update lead error:', error);
+    throw new Error('Failed to update lead');
   }
 };
 
-// --- DEALERSHIPS ---
+// ============================================
+// DEALERSHIP MANAGEMENT FUNCTIONS
+// ============================================
 
+/**
+ * Fetch all dealerships from database
+ */
 export const fetchDealers = async (): Promise<Dealership[]> => {
   if (isDemoMode) {
-    return getLocalData('dealers', MOCK_DEALERS);
-  }
-
-  try {
-    const { data, error } = await supabase.from('dealerships').select('*');
-    if (error) throw error;
-    if (data) return data as Dealership[];
+    console.warn('⚠️ Demo mode - database not configured');
     return [];
-  } catch (error) {
-    console.warn("Fetch Dealers Error", error);
-    return getLocalData('dealers', MOCK_DEALERS);
-  }
-};
-
-export const createDealer = async (dealer: Dealership) => {
-  if (isDemoMode) {
-     const current = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
-     const filtered = current.filter(d => d.email.toLowerCase() !== dealer.email.toLowerCase());
-     setLocalData('dealers', [...filtered, dealer]);
-     return;
   }
 
-  try {
-    const { error } = await supabase.from('dealerships').insert([dealer]);
-    if (error) {
-        console.error("Supabase Create Dealer Error:", error);
-        throw error;
-    }
-  } catch (error) {
-     const current = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
-     const filtered = current.filter(d => d.email.toLowerCase() !== dealer.email.toLowerCase());
-     setLocalData('dealers', [...filtered, dealer]);
-  }
-};
-
-export const updateDealer = async (id: string, updates: Partial<Dealership>) => {
-  if (isDemoMode) {
-    const current = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
-    const updated = current.map(d => d.id === id ? { ...d, ...updates } : d);
-    setLocalData('dealers', updated);
-    return;
-  }
-
-  try {
-    const { error } = await supabase.from('dealerships').update(updates).eq('id', id);
-    if (error) throw error;
-  } catch (error) {
-    const current = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
-    const updated = current.map(d => d.id === id ? { ...d, ...updates } : d);
-    setLocalData('dealers', updated);
-  }
-};
-
-// --- AUTH HELPER ---
-
-export const signInDealer = async (email: string, password?: string) => {
-  // 1. Check Local Data First 
-  const dealers = getLocalData<Dealership[]>('dealers', MOCK_DEALERS);
-  const localUser = dealers.find(d => d.email.toLowerCase() === email.toLowerCase());
-  
-  if (isDemoMode && localUser) {
-      if (localUser.password && password) {
-          if (localUser.password === password) return localUser;
-      } else if (password === 'password123') {
-          return localUser;
-      }
-      return null;
-  }
-
-  // 2. Attempt Supabase Auth 
   try {
     const { data, error } = await supabase
       .from('dealerships')
       .select('*')
-      .ilike('email', email)
-      .maybeSingle(); 
-      
-    if (error) {
-        console.error("Supabase Login Query Error:", error);
-        throw error;
-    }
-    
-    if (data) {
-        if (data.password && password && data.password !== password) return null;
-        return data as Dealership;
-    } 
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data as Dealership[]) || [];
   } catch (error) {
-    console.error("Login Exception:", error);
+    console.error('Fetch dealers error:', error);
+    return [];
   }
-  
-  // Fallback to local 
-  if (localUser) {
-       if (localUser.password && password) {
-          if (localUser.password === password) return localUser;
-      } else if (password === 'password123') {
-          return localUser;
-      }
+};
+
+/**
+ * Create new dealership (deprecated - use registerDealer instead)
+ * @deprecated Use registerDealer() for new registrations
+ */
+export const createDealer = async (dealer: Dealership): Promise<void> => {
+  console.warn('⚠️ createDealer is deprecated. Use registerDealer() instead.');
+  const result = await registerDealer(dealer);
+  if (!result.success) {
+    throw new Error(result.error);
   }
-  
-  return null;
+};
+
+/**
+ * Update existing dealership
+ */
+export const updateDealer = async (id: string, updates: Partial<Dealership>): Promise<void> => {
+  if (isDemoMode) {
+    console.warn('⚠️ Demo mode - dealer update skipped');
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('dealerships')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Update dealer error:', error);
+    throw new Error('Failed to update dealership');
+  }
+};
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+/**
+ * Test database connection
+ */
+export const testConnection = async (): Promise<boolean> => {
+  if (isDemoMode) {
+    console.error('⚠️ Demo mode - database not configured');
+    return false;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('dealerships')
+      .select('count')
+      .limit(1);
+
+    return !error;
+  } catch (error) {
+    console.error('Connection test failed:', error);
+    return false;
+  }
+};
+
+/**
+ * Get database statistics
+ */
+export const getDatabaseStats = async (): Promise<{ dealers: number; leads: number; activeDealers: number }> => {
+  if (isDemoMode) {
+    return { dealers: 0, leads: 0, activeDealers: 0 };
+  }
+
+  try {
+    const [dealersCount, leadsCount, activeCount] = await Promise.all([
+      supabase.from('dealerships').select('count', { count: 'exact', head: true }),
+      supabase.from('leads').select('count', { count: 'exact', head: true }),
+      supabase.from('dealerships').select('count', { count: 'exact', head: true }).eq('status', 'Active')
+    ]);
+
+    return {
+      dealers: dealersCount.count || 0,
+      leads: leadsCount.count || 0,
+      activeDealers: activeCount.count || 0
+    };
+  } catch (error) {
+    console.error('Get stats error:', error);
+    return { dealers: 0, leads: 0, activeDealers: 0 };
+  }
 };

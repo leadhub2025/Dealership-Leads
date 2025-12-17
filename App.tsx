@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
-import { ViewState, Lead, LeadStatus, Dealership, User } from './types';
+import { ViewState, Lead, LeadStatus, Dealership, User, DealershipRegistration } from './types';
 import { Menu, Loader2, CheckCircle, Mail, ArrowRight, Sparkles } from 'lucide-react';
 import { REGION_ADJACENCY } from './constants';
-import { fetchLeads, fetchDealers, createLead, updateLead, createDealer, updateDealer } from './services/supabaseService';
+import { fetchLeads, fetchDealers, createLead, updateLead, updateDealer } from './services/supabaseService';
+import { registerDealership, toUserSession } from './services/authService';
 import { sendWelcomeEmail } from './services/emailService';
 import { Logo } from './components/Logo';
 
@@ -87,13 +88,12 @@ const App: React.FC = () => {
 
 
   // --- Dealer Logic ---
-  const registerDealership = async (dealer: Dealership) => {
+  const addDealerToState = async (dealer: Dealership) => {
     try {
-      await createDealer(dealer);
       setDealers(prev => [...prev, dealer]);
     } catch (e) {
-      console.error("Failed to register dealer", e);
-      alert("Database Error: Could not register dealer.");
+      console.error("Failed to add dealer", e);
+      alert("Database Error: Could not add dealer.");
     }
   };
 
@@ -109,69 +109,116 @@ const App: React.FC = () => {
   };
 
   // Handle Sign Up completion for new users (Public Flow)
-  const handleSignUp = async (dealer: Dealership) => {
+  const handleSignUp = async (dealer: any) => {
     setLoading(true);
     setShowOnboarding(false);
-    
+
     try {
-       const dealerWithBilling: Dealership = {
-        ...dealer,
-        password: dealer.password,
-        billing: dealer.billing || {
-          plan: 'Standard',
-          costPerLead: 350,
-          credits: 0,
-          totalSpent: 0,
-          lastBilledDate: new Date().toISOString().split('T')[0],
-          currentUnbilledAmount: 0
+      // Extract email and password from dealer object (passed from Onboarding form)
+      const dealerEmail = dealer.email || '';
+      const dealerPassword = dealer.password || '';
+
+      if (!dealerEmail || !dealerPassword) {
+        setNotification({
+          message: 'Email and password are required',
+          type: 'error'
+        });
+        setTimeout(() => setNotification(null), 5000);
+        setLoading(false);
+        setShowOnboarding(true);
+        return;
+      }
+
+      // Create registration payload for new auth system
+      const registrationData: DealershipRegistration = {
+        dealership: {
+          name: dealer.name,
+          brand: dealer.brand,
+          region: dealer.region,
+          detailedAor: dealer.detailedAor,
+          phone: dealer.phone,
+          address: dealer.address
+        },
+        user: {
+          full_name: dealer.contactPerson || 'Principal User',
+          email: dealerEmail,
+          password: dealerPassword,
+          phone: dealer.phone
         }
       };
-      
-      await createDealer(dealerWithBilling);
-      
-      setDealers(prev => {
-         const others = prev.filter(d => d.email.toLowerCase() !== dealerWithBilling.email.toLowerCase());
-         return [...others, dealerWithBilling];
-      });
+
+      // Use the new registerDealership function
+      const result = await registerDealership(registrationData);
+
+      if (!result.success) {
+        // Registration failed
+        setNotification({
+          message: result.error || "Registration failed. Please try again.",
+          type: 'error'
+        });
+        setTimeout(() => setNotification(null), 5000);
+        setLoading(false);
+        setShowOnboarding(true); // Show form again
+        return;
+      }
+
+      // Registration successful - both dealership and user created
+      const registeredDealer = result.dealership!;
+      const registeredUser = result.user!;
+
+      // Add dealership to state
+      setDealers(prev => [...prev, registeredDealer]);
 
       try {
-        await sendWelcomeEmail(dealerWithBilling.email, dealerWithBilling.contactPerson);
+        await sendWelcomeEmail(registeredUser.email, registeredUser.full_name);
       } catch (emailError) {
-        console.warn("Email sending failed slightly but flow continues", emailError);
+        console.warn("Email sending failed but flow continues", emailError);
       }
-      
-      const newUser: User = {
-        id: `user-${dealerWithBilling.id}`,
-        name: dealerWithBilling.contactPerson,
-        email: dealerWithBilling.email,
+
+      // Convert DBUser to User session and auto-login
+      const newUser: User = toUserSession(registeredUser);
+      setCurrentUser(newUser);
+
+      // Show success notification
+      setRegistrationSuccess({
+        name: registeredUser.full_name,
+        email: registeredUser.email
+      });
+
+      // Set user as logged in
+      const sessionUser: User = {
+        id: newUser.id,
+        name: registeredUser.full_name,
+        email: registeredUser.email,
         role: 'DEALER_PRINCIPAL',
-        dealerId: dealerWithBilling.id,
-        avatar: `https://ui-avatars.com/api/?name=${dealerWithBilling.id}`
+        dealerId: registeredDealer.id,
+        avatar: `https://ui-avatars.com/api/?name=${registeredDealer.contactPerson}&background=0D8ABC&color=fff`
       };
-      
+
       localStorage.setItem('autolead_session', JSON.stringify(newUser));
 
       setCurrentUser(newUser);
       setView('DASHBOARD');
 
       setNotification({
-        message: `Welcome aboard! Confirmation email sent to ${dealerWithBilling.email}`,
+        message: `Welcome aboard! Account created successfully.`,
         type: 'success'
       });
       setTimeout(() => setNotification(null), 5000);
-      
-      setRegistrationSuccess({ 
-        name: dealerWithBilling.contactPerson, 
-        email: dealerWithBilling.email 
+
+      setRegistrationSuccess({
+        name: registeredDealer.contactPerson,
+        email: registeredDealer.email
       });
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Signup failed", e);
       setNotification({
-        message: "Registration failed. Please try again.",
+        message: e?.message || "Registration failed. Please try again.",
         type: 'error'
       });
       setTimeout(() => setNotification(null), 5000);
+      setShowOnboarding(true); // Show form again
     } finally {
       setLoading(false);
     }

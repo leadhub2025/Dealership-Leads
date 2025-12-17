@@ -2,10 +2,9 @@
 import React, { useState } from 'react';
 import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2 } from 'lucide-react';
 import { User, Dealership } from '../types';
-import { signInDealer } from '../services/supabaseService';
+import { signIn, toUserSession } from '../services/authService';
 import { sendPasswordResetEmail } from '../services/emailService';
 import { Logo } from './Logo';
-import { isDemoMode } from '../lib/supabaseClient';
 
 interface LoginProps {
   dealers: Dealership[];
@@ -20,14 +19,6 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Auto-fill for convenience during testing/review, but quiet about it
-  React.useEffect(() => {
-    if (isDemoMode && dealers.length > 0) {
-        setEmail(dealers[0].email);
-        setPassword('password123');
-    }
-  }, [dealers]);
-
   // Forgot Password State
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -40,47 +31,49 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
     setLoading(true);
     setError('');
 
+    // Validate inputs
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const dealer = await signInDealer(email, password);
-      
-      if (dealer) {
-        if (dealer.status === 'Pending') {
-          setError('Account is pending approval. Please contact support.');
-          setLoading(false);
-          return;
-        }
+      // Use new authentication service
+      const dbUser = await signIn(email, password);
 
-        let role: any = 'DEALER_PRINCIPAL';
-        if (email.toLowerCase().includes('admin') || email.toLowerCase() === 'owner@autoleadsa.co.za') {
-           role = 'ADMIN';
-        } else if (email.toLowerCase().includes('manager')) {
-           role = 'SALES_MANAGER';
-        } else if (email.toLowerCase().includes('sales')) {
-           role = 'SALES_EXECUTIVE';
-        }
-
-        const user: User = {
-          id: `user-${dealer.id}`,
-          name: dealer.contactPerson,
-          email: dealer.email,
-          role: role, 
-          dealerId: dealer.id,
-          avatar: `https://ui-avatars.com/api/?name=${dealer.contactPerson}&background=0D8ABC&color=fff`
-        };
-        
-        if (keepSignedIn) {
-          localStorage.setItem('autolead_session', JSON.stringify(user));
-        } else {
-          localStorage.removeItem('autolead_session');
-        }
-
-        onLogin(user);
-      } else {
-        setError('Invalid credentials or no dealership found. Please try again.');
+      if (!dbUser) {
+        setError('Invalid email or password. Please try again.');
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      setError('Login failed. Please check connection.');
+
+      // Check account status
+      if (dbUser.status === 'Suspended') {
+        setError('Account has been suspended. Please contact support.');
+        setLoading(false);
+        return;
+      }
+
+      if (dbUser.status === 'Inactive') {
+        setError('Account is inactive. Please contact support.');
+        setLoading(false);
+        return;
+      }
+
+      // Convert DBUser to User session format
+      const user: User = toUserSession(dbUser);
+
+      if (keepSignedIn) {
+        localStorage.setItem('autolead_session', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('autolead_session');
+      }
+
+      onLogin(user);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message || 'Login failed. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
