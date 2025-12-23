@@ -9,6 +9,7 @@
 
 import { supabase, isDemoMode } from '../lib/supabaseClient';
 import { DBUser, User, UserRole, DealershipRegistration, Dealership } from '../types';
+import { sendWelcomeEmail, sendPasswordResetEmail } from './emailService';
 
 // ============================================
 // PASSWORD HASHING UTILITIES
@@ -208,6 +209,17 @@ export const registerDealership = async (
     // Remove password from returned user
     const { password: _, ...userWithoutPassword } = user;
 
+    // Send welcome email (don't block registration if email fails)
+    try {
+      await sendWelcomeEmail(
+        registration.user.email,
+        registration.user.full_name,
+        registration.dealership.name
+      );
+    } catch (emailError) {
+      console.warn('Welcome email failed but registration succeeded:', emailError);
+    }
+
     return {
       success: true,
       user: userWithoutPassword as DBUser,
@@ -385,4 +397,274 @@ export const getRoleFromEmail = (email: string): UserRole => {
   }
 
   return 'DEALER_PRINCIPAL';
+};
+
+// ============================================
+// PASSWORD RESET FUNCTIONS
+// ============================================
+
+/**
+ * Generate a secure reset token
+ */
+const generateResetToken = (): string => {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+};
+
+/**
+ * Request password reset - sends email with reset token
+ * @param email - User's email address
+ * @returns Success status and message
+ */
+export const requestPasswordReset = async (
+  email: string
+): Promise<{ success: boolean; message: string }> => {
+
+  if (isDemoMode) {
+    return {
+      success: false,
+      message: 'Database not configured. Please add Supabase credentials to .env file'
+    };
+  }
+
+  try {
+    // Check if user exists
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, full_name')
+      .ilike('email', email)
+      .maybeSingle();
+
+    if (error || !user) {
+      // Don't reveal if email exists or not (security best practice)
+      return {
+        success: true,
+        message: 'If this email is registered, you will receive a password reset link shortly.'
+      };
+    }
+
+    // Generate reset token
+    const resetToken = generateResetToken();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Token valid for 1 hour
+
+    // Store token in database
+    const { error: insertError } = await supabase
+      .from('password_resets')
+      .insert([{
+        token: resetToken,
+        user_id: user.id,
+        expires_at: expiresAt.toISOString(),
+        used: false
+      }]);
+
+    if (insertError) {
+      console.error('Failed to store reset token:', insertError);
+      return {
+        success: false,
+        message: 'Failed to process password reset request. Please try again.'
+      };
+    }
+
+    // Send reset email
+    const emailSent = await sendPasswordResetEmail(
+      user.email,
+      resetToken,
+      user.full_name
+    );
+
+    if (emailSent) {
+      console.log(`✅ Password reset token created for ${email}`);
+      console.log(`Token expires at: ${expiresAt.toISOString()}`);
+    }
+
+    return {
+      success: true,
+      message: 'If this email is registered, you will receive a password reset link shortly.'
+    };
+
+  } catch (error: any) {
+    console.error('Password reset request error:', error);
+    return {
+      success: false,
+      message: 'Failed to process password reset request. Please try again.'
+    };
+  }
+};
+
+/**
+ * Reset password using token
+ * @param token - Reset token from email
+ * @param newPassword - New password
+ * @returns Success status and message
+ */
+export const resetPassword = async (
+  token: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> => {
+
+  if (isDemoMode) {
+    return {
+      success: false,
+      message: 'Database not configured'
+    };
+  }
+
+  try {
+    // Validate password strength
+    if (!newPassword || newPassword.length < 6) {
+      return {
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      };
+    }
+
+    // Verify token from database
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('password_resets')
+      .select('*')
+      .eq('token', token)
+      .eq('used', false)
+      .maybeSingle();
+
+    if (tokenError || !tokenData) {
+      return {
+        success: false,
+        message: 'Invalid or expired reset token. Please request a new password reset.'
+      };
+    }
+
+    // Check if token is expired
+    const expiresAt = new Date(tokenData.expires_at);
+    if (new Date() > expiresAt) {
+      // Mark token as used
+      await supabase
+        .from('password_resets')
+        .update({ used: true })
+        .eq('id', tokenData.id);
+
+      return {
+        success: false,
+        message: 'Reset token has expired. Please request a new password reset.'
+      };
+    }
+
+    // Hash the new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update user password using the userId from token
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('id', tokenData.user_id);
+
+    if (updateError) {
+      console.error('Password update error:', updateError);
+      return {
+        success: false,
+        message: 'Failed to reset password. Please try again.'
+      };
+    }
+
+    // Mark token as used
+    await supabase
+      .from('password_resets')
+      .update({ used: true })
+      .eq('id', tokenData.id);
+
+    console.log('✅ Password reset successful for user:', tokenData.user_id);
+
+    return {
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.'
+    };
+
+  } catch (error: any) {
+    console.error('Password reset error:', error);
+    return {
+      success: false,
+      message: 'Failed to reset password. Please try again.'
+    };
+  }
+};
+
+/**
+ * Update user password (when logged in)
+ * @param userId - User ID
+ * @param currentPassword - Current password
+ * @param newPassword - New password
+ */
+export const updatePassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> => {
+
+  if (isDemoMode) {
+    return {
+      success: false,
+      message: 'Database not configured'
+    };
+  }
+
+  try {
+    // Get user with password
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('password')
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) {
+      return {
+        success: false,
+        message: 'User not found'
+      };
+    }
+
+    // Verify current password
+    const isValid = await verifyPassword(currentPassword, user.password);
+    if (!isValid) {
+      return {
+        success: false,
+        message: 'Current password is incorrect'
+      };
+    }
+
+    // Validate new password
+    if (!newPassword || newPassword.length < 6) {
+      return {
+        success: false,
+        message: 'New password must be at least 6 characters long'
+      };
+    }
+
+    // Hash and update password
+    const hashedPassword = await hashPassword(newPassword);
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Password update error:', updateError);
+      return {
+        success: false,
+        message: 'Failed to update password'
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Password updated successfully'
+    };
+
+  } catch (error: any) {
+    console.error('Update password error:', error);
+    return {
+      success: false,
+      message: 'Failed to update password. Please try again.'
+    };
+  }
 };
