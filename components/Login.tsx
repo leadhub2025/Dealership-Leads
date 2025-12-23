@@ -2,8 +2,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, ArrowRight, ShieldAlert, X, CheckCircle, Loader2 } from 'lucide-react';
 import { User, Dealership } from '../types';
-import { signIn, toUserSession } from '../services/authService';
-import { sendPasswordResetEmail } from '../services/emailService';
+import { signIn, toUserSession, requestPasswordReset } from '../services/authService';
 import { Logo } from './Logo';
 
 interface LoginProps {
@@ -85,19 +84,17 @@ const Login: React.FC<LoginProps> = ({ dealers, onLogin, onSignUpClick }) => {
     setForgotLoading(true);
     setForgotError('');
 
-    // Check against local list for visual feedback
-    const exists = dealers.some(d => d.email.toLowerCase() === forgotEmail.toLowerCase());
-    if (!exists) {
-        setForgotError("We couldn't find an account with that email address.");
-        setForgotLoading(false);
-        return;
-    }
-
     try {
-        await sendPasswordResetEmail(forgotEmail);
-        setForgotSuccess(true);
+        // Use new password reset service
+        const result = await requestPasswordReset(forgotEmail);
+console.log('Password reset request result:', result);
+        if (result.success) {
+          setForgotSuccess(true);
+        } else {
+          setForgotError(result.message || "Failed to send reset email.");
+        }
     } catch (e) {
-        setForgotError("Failed to send reset email.");
+        setForgotError("Failed to send reset email. Please try again.");
     } finally {
         setForgotLoading(false);
     }
