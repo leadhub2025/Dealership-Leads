@@ -21,6 +21,7 @@ const Marketing = React.lazy(() => import('./components/Marketing'));
 const About = React.lazy(() => import('./components/About'));
 const Login = React.lazy(() => import('./components/Login'));
 const PublicLeadForm = React.lazy(() => import('./components/PublicLeadForm'));
+const ResetPassword = React.lazy(() => import('./components/ResetPassword'));
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -31,6 +32,9 @@ const App: React.FC = () => {
   // Public Form Mode
   const [isPublicMode, setIsPublicMode] = useState(false);
   const [targetDealerId, setTargetDealerId] = useState<string | null>(null);
+
+  // Reset Password Mode
+  const [isResetPasswordMode, setIsResetPasswordMode] = useState(false);
 
   // --- State Management ---
   const [dealers, setDealers] = useState<Dealership[]>([]);
@@ -66,9 +70,17 @@ const App: React.FC = () => {
         return;
     }
 
+    // Check for Reset Password Mode in URL
+    const path = window.location.pathname;
+    if (path === '/reset-password' || params.get('token')) {
+        setIsResetPasswordMode(true);
+        setLoading(false);
+        return;
+    }
+
     const checkSession = async () => {
       setLoading(true);
-      
+
       const savedSession = localStorage.getItem('autolead_session');
       if (savedSession) {
         try {
@@ -79,7 +91,7 @@ const App: React.FC = () => {
           localStorage.removeItem('autolead_session');
         }
       }
-      
+
       await loadData();
       setLoading(false);
     };
@@ -384,6 +396,21 @@ const App: React.FC = () => {
       return (
          <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
             <PublicLeadForm dealerId={targetDealerId} />
+         </Suspense>
+      );
+  }
+
+  // RESET PASSWORD MODE
+  if (isResetPasswordMode) {
+      return (
+         <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
+            <ResetPassword
+               onSuccess={() => {
+                  // Redirect back to login page
+                  setIsResetPasswordMode(false);
+                  window.history.pushState({}, '', '/');
+               }}
+            />
          </Suspense>
       );
   }
